@@ -13,3 +13,10 @@ and relevant tags like the session ID are reported to Zipkin.
 adds trace context to the custom payload of outgoing requests. If
 server integration is in place, cassandra will contribute data to these
 RPC spans.
+
+## Artifacts
+Artifacts are under the maven group id `io.zipkin.brave.cassandra`
+### Library Releases
+Releases are uploaded to [Bintray](https://bintray.com/openzipkin/maven/brave-cassandra) and synchronized to [Maven Central](http://search.maven.org/#search%7Cga%7C1%7Cg%3A%22io.zipkin.brave.cassandra%22)
+### Library Snapshots
+Snapshots are uploaded to [JFrog](http://oss.jfrog.org/artifactory/oss-snapshot-local) after commits to master.
