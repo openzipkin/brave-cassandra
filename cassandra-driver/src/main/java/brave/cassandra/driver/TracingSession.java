@@ -36,10 +36,9 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import zipkin.Endpoint;
+import zipkin2.Endpoint;
 
 import static brave.Span.Kind.CLIENT;
-import static zipkin.internal.Util.checkNotNull;
 
 public final class TracingSession extends AbstractSession {
   public static Session create(Tracing tracing, Session delegate) {
@@ -59,8 +58,9 @@ public final class TracingSession extends AbstractSession {
   final Session delegate;
 
   TracingSession(CassandraClientTracing cassandraTracing, Session target) {
-    checkNotNull(cassandraTracing, "cassandraTracing");
-    this.delegate = checkNotNull(target, "delegate");
+    if (cassandraTracing == null) throw new NullPointerException("cassandraTracing == null");
+    if (target == null) throw new NullPointerException("target == null");
+    this.delegate = target;
     tracer = cassandraTracing.tracing().tracer();
     sampler = cassandraTracing.sampler();
     parser = cassandraTracing.parser();
@@ -69,6 +69,10 @@ public final class TracingSession extends AbstractSession {
         ? remoteServiceName
         : target.getCluster().getClusterName();
     injector = cassandraTracing.tracing().propagation().injector((carrier, key, v) -> {
+      if (v == null) { // for example, if injecting a null parent id field
+        carrier.remove(key);
+        return;
+      }
       int length = v.length(); // all values are ascii
       byte[] buf = new byte[length];
       for (int i = 0; i < length; i++) {
@@ -108,10 +112,12 @@ public final class TracingSession extends AbstractSession {
     Futures.addCallback(result, new FutureCallback<ResultSet>() {
       @Override public void onSuccess(ResultSet result) {
         InetSocketAddress host = result.getExecutionInfo().getQueriedHost().getSocketAddress();
-        Endpoint.Builder remoteEndpoint = Endpoint.builder().serviceName(remoteServiceName);
-        remoteEndpoint.parseIp(host.getAddress());
-        remoteEndpoint.port(host.getPort());
-        span.remoteEndpoint(remoteEndpoint.build());
+        span.remoteEndpoint(Endpoint.newBuilder()
+            .serviceName(remoteServiceName)
+            .ip(host.getAddress())
+            .port(host.getPort())
+            .build()
+        );
         parser.response(result, span);
         span.finish();
       }

@@ -37,8 +37,8 @@
     <main.signature.artifact>java17</main.signature.artifact>
 
     <main.basedir>${project.basedir}</main.basedir>
-    <brave.version>4.4.0</brave.version>
-    <zipkin-reporter.version>0.10.0</zipkin-reporter.version>
+    <brave.version>4.7.0</brave.version>
+    <zipkin-reporter.version>1.1.0</zipkin-reporter.version>
 
     <license-maven-plugin.version>2.11</license-maven-plugin.version>
   </properties>
