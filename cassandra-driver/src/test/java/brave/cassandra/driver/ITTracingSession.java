@@ -16,7 +16,7 @@ package brave.cassandra.driver;
 import brave.SpanCustomizer;
 import brave.Tracer;
 import brave.Tracing;
-import brave.internal.StrictCurrentTraceContext;
+import brave.propagation.StrictCurrentTraceContext;
 import brave.sampler.Sampler;
 import cassandra.CassandraRule;
 import com.datastax.driver.core.Cluster;
@@ -34,14 +34,13 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
-import zipkin.Constants;
-import zipkin.Endpoint;
-import zipkin.Span;
-import zipkin.internal.Util;
+import zipkin2.Annotation;
+import zipkin2.Endpoint;
+import zipkin2.Span;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.entry;
 import static org.assertj.core.api.Assertions.failBecauseExceptionWasNotThrown;
-import static org.assertj.core.api.Assertions.tuple;
 import static org.junit.Assume.assumeTrue;
 
 public class ITTracingSession {
@@ -90,8 +89,8 @@ public class ITTracingSession {
     }
 
     assertThat(spans)
-        .extracting(s -> tuple(s.traceId, s.parentId))
-        .contains(tuple(parent.context().traceId(), parent.context().parentId()));
+        .extracting(Span::traceId)
+        .contains(parent.context().traceIdString());
   }
 
   // CASSANDRA-12835 particularly is in 3.11, which fixes simple (non-bound) statement tracing
@@ -115,16 +114,16 @@ public class ITTracingSession {
     invokeBoundStatement();
 
     assertThat(CustomPayloadCaptor.ref.get().get("X-B3-Sampled"))
-        .extracting(b -> string(b))
-        .containsExactly("0");
+        .extracting(ByteBuffer::get)
+        .containsExactly('0');
   }
 
   @Test public void reportsClientAnnotationsToZipkin() throws Exception {
     invokeBoundStatement();
 
     assertThat(spans)
-        .flatExtracting(s -> s.annotations)
-        .extracting(a -> a.value)
+        .flatExtracting(Span::annotations)
+        .extracting(Annotation::value)
         .containsExactly("cs", "cr");
   }
 
@@ -132,7 +131,7 @@ public class ITTracingSession {
     invokeBoundStatement();
 
     assertThat(spans)
-        .extracting(s -> s.name)
+        .extracting(Span::name)
         .containsExactly("bound-statement");
   }
 
@@ -152,10 +151,8 @@ public class ITTracingSession {
     reportsSpanOnTransportException();
 
     assertThat(spans)
-        .flatExtracting(s -> s.binaryAnnotations)
-        .filteredOn(a -> a.key.equals(Constants.ERROR))
-        .extracting(a -> new String(a.value, Util.UTF_8))
-        .containsExactly("All host(s) tried for query failed (no host was tried)");
+        .flatExtracting(s -> s.tags().entrySet())
+        .containsOnlyOnce(entry("error", "All host(s) tried for query failed (no host was tried)"));
   }
 
   @Test public void addsErrorTag_onCanceledFuture() throws Exception {
@@ -164,23 +161,18 @@ public class ITTracingSession {
 
     close(); // blocks until the cancel finished
 
-    assertThat(spans)
-        .flatExtracting(s -> s.binaryAnnotations)
-        .filteredOn(a -> a.key.equals(Constants.ERROR))
-        .extracting(a -> new String(a.value, Util.UTF_8))
-        .containsExactly("Task was cancelled.");
+    assertThat(spans).flatExtracting(s -> s.tags().entrySet())
+        .containsOnlyOnce(entry("error", "Task was cancelled."));
   }
 
   @Test public void reportsServerAddress() throws Exception {
     invokeBoundStatement();
 
     assertThat(spans)
-        .flatExtracting(s -> s.binaryAnnotations)
-        .filteredOn(b -> b.key.equals(Constants.SERVER_ADDR))
-        .extracting(b -> b.endpoint)
-        .containsExactly(Endpoint.builder()
+        .flatExtracting(Span::remoteEndpoint)
+        .containsExactly(Endpoint.newBuilder()
             .serviceName(cluster.getClusterName())
-            .ipv4(127 << 24 | 1)
+            .ip("127.0.0.1")
             .port(cassandra.contactPoint().getPort()).build()
         );
   }
@@ -218,13 +210,11 @@ public class ITTracingSession {
     invokeBoundStatement();
 
     assertThat(spans)
-        .extracting(s -> s.name)
+        .extracting(Span::name)
         .containsExactly("query");
 
     assertThat(spans)
-        .flatExtracting(s -> s.binaryAnnotations)
-        .filteredOn(b -> b.key.equals(Constants.SERVER_ADDR))
-        .extracting(b -> b.endpoint.serviceName)
+        .flatExtracting(Span::remoteServiceName)
         .containsExactly("remote-cluster");
   }
 
@@ -235,11 +225,7 @@ public class ITTracingSession {
   Tracing.Builder tracingBuilder(Sampler sampler) {
     return brave.Tracing.newBuilder()
         .currentTraceContext(new StrictCurrentTraceContext())
-        .reporter(spans::add)
+        .spanReporter(spans::add)
         .sampler(sampler);
-  }
-
-  static String string(ByteBuffer b) {
-    return b != null ? Util.UTF_8.decode(b).toString() : null;
   }
 }

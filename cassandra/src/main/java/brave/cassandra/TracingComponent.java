@@ -17,14 +17,16 @@ import brave.Tracer;
 import brave.propagation.Propagation;
 import brave.propagation.TraceContext;
 import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
 import java.util.Map;
-import zipkin.internal.Util;
 
 abstract class TracingComponent {
+  static final Charset UTF_8 = Charset.forName("UTF-8");
+
   /** Getter that pulls trace fields from ascii values */
   static final Propagation.Getter<Map<String, ByteBuffer>, String> GETTER = (carrier, key) -> {
     ByteBuffer buf = carrier.get(key);
-    return buf != null ? Util.UTF_8.decode(buf).toString() : null;
+    return buf != null ? UTF_8.decode(buf).toString() : null;
   };
 
   abstract Tracer tracer();

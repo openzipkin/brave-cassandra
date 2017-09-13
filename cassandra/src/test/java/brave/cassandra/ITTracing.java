@@ -29,9 +29,7 @@ import java.util.function.Function;
 import org.junit.After;
 import org.junit.ClassRule;
 import org.junit.Test;
-import zipkin.Constants;
-import zipkin.Span;
-import zipkin.internal.MergeById;
+import zipkin2.Span;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -45,7 +43,7 @@ public class ITTracing {
   ConcurrentLinkedDeque<Span> spans = new ConcurrentLinkedDeque<>();
   brave.Tracing tracing = brave.Tracing.newBuilder()
       .localServiceName("cassandra")
-      .reporter(spans::add)
+      .spanReporter(spans::add)
       .build();
 
   @After public void after() {
@@ -89,24 +87,19 @@ public class ITTracing {
     executeTraced(session -> session
         .prepare("SELECT * from system.schema_keyspaces").bind());
 
-    assertThat(MergeById.apply(spans))
-        .hasSize(1);
-
     assertThat(spans)
-        .flatExtracting(s -> s.annotations)
-        .extracting(a -> a.value)
-        .containsOnlyOnce("cs", "sr", "ss", "cr");
+        .flatExtracting(Span::kind)
+        .containsOnlyOnce(Span.Kind.SERVER, Span.Kind.CLIENT);
   }
 
-  @Test public void reportsServerAnnotationsToZipkin() throws Exception {
+  @Test public void reportsServerKindToZipkin() throws Exception {
     execute(session -> session
         .prepare("SELECT * from system.schema_keyspaces")
         .enableTracing().bind());
 
     assertThat(spans)
-        .flatExtracting(s -> s.annotations)
-        .extracting(a -> a.value)
-        .containsOnlyOnce("sr", "ss");
+        .flatExtracting(Span::kind)
+        .containsOnlyOnce(Span.Kind.SERVER);
   }
 
   @Test public void defaultSpanNameIsType() throws Exception {
@@ -115,7 +108,7 @@ public class ITTracing {
         .enableTracing().bind());
 
     assertThat(spans)
-        .extracting(s -> s.name)
+        .extracting(Span::name)
         .containsExactly("query");
   }
 
@@ -125,8 +118,7 @@ public class ITTracing {
         .enableTracing().bind());
 
     assertThat(spans)
-        .flatExtracting(s -> s.binaryAnnotations)
-        .extracting(b -> b.key)
+        .flatExtracting(s -> s.tags().keySet())
         .contains("cassandra.request", "cassandra.session_id");
   }
 
@@ -136,9 +128,9 @@ public class ITTracing {
         .enableTracing().bind());
 
     assertThat(spans)
-        .flatExtracting(s -> s.binaryAnnotations)
-        .extracting(b -> b.key)
-        .contains(Constants.CLIENT_ADDR);
+        .flatExtracting(Span::remoteEndpoint)
+        .hasSize(1)
+        .doesNotContainNull();
   }
 
   void execute(Function<Session, BoundStatement> statement) {

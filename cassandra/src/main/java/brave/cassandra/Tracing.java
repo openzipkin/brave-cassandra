@@ -24,9 +24,10 @@ import java.util.Map;
 import java.util.UUID;
 import org.apache.cassandra.tracing.TraceState;
 import org.apache.cassandra.utils.FBUtilities;
-import zipkin.Endpoint;
 import zipkin.reporter.AsyncReporter;
+import zipkin.reporter.SpanEncoder;
 import zipkin.reporter.urlconnection.URLConnectionSender;
+import zipkin2.Endpoint;
 
 import static brave.Span.Kind.SERVER;
 
@@ -56,10 +57,11 @@ public class Tracing extends org.apache.cassandra.tracing.Tracing {
       component = new TracingComponent.Current();
       return;
     }
+    AsyncReporter<zipkin2.Span> spanReporter = AsyncReporter.builder(URLConnectionSender.json(endpoint))
+        .build(endpoint.contains("v2") ? SpanEncoder.JSON_V2 : SpanEncoder.JSON_V1);
     brave.Tracing tracing = brave.Tracing.newBuilder()
         .localServiceName(System.getProperty("zipkin.service_name", "cassandra"))
-        .reporter(AsyncReporter.create(URLConnectionSender.create(endpoint)))
-        .build();
+        .spanReporter(spanReporter).build();
     component = new TracingComponent.Explicit(tracing);
   }
 
@@ -109,9 +111,7 @@ public class Tracing extends org.apache.cassandra.tracing.Tracing {
     parseRequest(state, request, parameters, span);
     // observed parameter keys include page_size, consistency_level, serial_consistency_level, query
 
-    Endpoint.Builder remoteEndpoint = Endpoint.builder().serviceName("");
-    remoteEndpoint.parseIp(client);
-    span.remoteEndpoint(remoteEndpoint.build());
+    span.remoteEndpoint(Endpoint.newBuilder().ip(client).build());
     span.start();
     return state;
   }
