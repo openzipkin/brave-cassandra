@@ -218,8 +218,8 @@ public class ITTracingSession {
         .containsExactly("remote-cluster");
   }
 
-  ResultSet invokeBoundStatement() {
-    return session.execute(prepared.bind());
+  void invokeBoundStatement() {
+    session.execute(prepared.bind());
   }
 
   Tracing.Builder tracingBuilder(Sampler sampler) {

@@ -22,12 +22,13 @@ import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.UUID;
+import javax.annotation.Nullable;
 import org.apache.cassandra.tracing.TraceState;
 import org.apache.cassandra.utils.FBUtilities;
-import zipkin.reporter.AsyncReporter;
-import zipkin.reporter.SpanEncoder;
-import zipkin.reporter.urlconnection.URLConnectionSender;
 import zipkin2.Endpoint;
+import zipkin2.codec.SpanBytesEncoder;
+import zipkin2.reporter.AsyncReporter;
+import zipkin2.reporter.urlconnection.URLConnectionSender;
 
 import static brave.Span.Kind.SERVER;
 
@@ -57,8 +58,9 @@ public class Tracing extends org.apache.cassandra.tracing.Tracing {
       component = new TracingComponent.Current();
       return;
     }
-    AsyncReporter<zipkin2.Span> spanReporter = AsyncReporter.builder(URLConnectionSender.json(endpoint))
-        .build(endpoint.contains("v2") ? SpanEncoder.JSON_V2 : SpanEncoder.JSON_V1);
+    AsyncReporter<zipkin2.Span> spanReporter =
+        AsyncReporter.builder(URLConnectionSender.create(endpoint))
+            .build(endpoint.contains("v2") ? SpanBytesEncoder.JSON_V2 : SpanBytesEncoder.JSON_V1);
     brave.Tracing tracing = brave.Tracing.newBuilder()
         .localServiceName(System.getProperty("zipkin.service_name", "cassandra"))
         .spanReporter(spanReporter).build();
@@ -87,7 +89,7 @@ public class Tracing extends org.apache.cassandra.tracing.Tracing {
   }
 
   /** This extracts the RPC span encoded in the custom payload, or starts a new trace */
-  Span spanFromPayload(Tracer tracer, Map<String, ByteBuffer> payload) {
+  Span spanFromPayload(Tracer tracer, @Nullable Map<String, ByteBuffer> payload) {
     TraceContextOrSamplingFlags contextOrFlags = payload == null
         ? TraceContextOrSamplingFlags.create(SamplingFlags.EMPTY)
         : component.extractor().extract(payload);
