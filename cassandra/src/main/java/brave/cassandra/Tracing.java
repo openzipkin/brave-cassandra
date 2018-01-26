@@ -1,5 +1,5 @@
 /**
- * Copyright 2017 The OpenZipkin Authors
+ * Copyright 2017-2018 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -16,13 +16,13 @@ package brave.cassandra;
 import brave.Span;
 import brave.SpanCustomizer;
 import brave.Tracer;
+import brave.internal.Nullable;
 import brave.propagation.SamplingFlags;
 import brave.propagation.TraceContextOrSamplingFlags;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.UUID;
-import javax.annotation.Nullable;
 import org.apache.cassandra.tracing.TraceState;
 import org.apache.cassandra.utils.FBUtilities;
 import zipkin2.Endpoint;
@@ -90,12 +90,10 @@ public class Tracing extends org.apache.cassandra.tracing.Tracing {
 
   /** This extracts the RPC span encoded in the custom payload, or starts a new trace */
   Span spanFromPayload(Tracer tracer, @Nullable Map<String, ByteBuffer> payload) {
-    TraceContextOrSamplingFlags contextOrFlags = payload == null
+    TraceContextOrSamplingFlags extracted = payload == null
         ? TraceContextOrSamplingFlags.create(SamplingFlags.EMPTY)
         : component.extractor().extract(payload);
-    return contextOrFlags.context() != null
-        ? tracer.joinSpan(contextOrFlags.context())
-        : tracer.newTrace(contextOrFlags.samplingFlags());
+    return tracer.nextSpan(extracted);
   }
 
   @Override protected final void stopSessionImpl() {
