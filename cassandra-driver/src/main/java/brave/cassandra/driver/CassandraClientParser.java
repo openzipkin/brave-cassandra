@@ -1,5 +1,5 @@
 /**
- * Copyright 2017 The OpenZipkin Authors
+ * Copyright 2017-2018 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -18,8 +18,6 @@ import com.datastax.driver.core.BoundStatement;
 import com.datastax.driver.core.ResultSet;
 import com.datastax.driver.core.Statement;
 import com.google.common.base.CaseFormat;
-
-import static zipkin.Constants.ERROR;
 
 /**
  * Provides reasonable defaults for the data contained in cassandra client spans. Subclass to
@@ -65,6 +63,6 @@ public class CassandraClientParser {
    */
   public void error(Throwable throwable, SpanCustomizer customizer) {
     String message = throwable.getMessage();
-    customizer.tag(ERROR, message != null ? message : throwable.getClass().getSimpleName());
+    customizer.tag("error", message != null ? message : throwable.getClass().getSimpleName());
   }
 }

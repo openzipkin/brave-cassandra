@@ -1,5 +1,5 @@
 /**
- * Copyright 2017 The OpenZipkin Authors
+ * Copyright 2017-2018 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -14,9 +14,8 @@
 package brave.cassandra.driver;
 
 import brave.Tracing;
+import brave.internal.Nullable;
 import com.google.auto.value.AutoValue;
-import javax.annotation.Nullable;
-import zipkin.Endpoint;
 
 @AutoValue
 public abstract class CassandraClientTracing {
@@ -47,8 +46,7 @@ public abstract class CassandraClientTracing {
    * production = TracingSession.create(httpTracing.remoteServiceName("production"));
    * }</pre>
    *
-   * @see zipkin.Constants#SERVER_ADDR
-   * @see brave.Span#remoteEndpoint(Endpoint)
+   * @see brave.Span#remoteEndpoint(zipkin2.Endpoint)
    */
   @Nullable public abstract String remoteServiceName();
 
