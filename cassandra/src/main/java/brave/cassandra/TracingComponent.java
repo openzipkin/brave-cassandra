@@ -1,5 +1,5 @@
-/**
- * Copyright 2017 The OpenZipkin Authors
+/*
+ * Copyright 2017-2018 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -24,21 +24,24 @@ abstract class TracingComponent {
   static final Charset UTF_8 = Charset.forName("UTF-8");
 
   /** Getter that pulls trace fields from ascii values */
-  static final Propagation.Getter<Map<String, ByteBuffer>, String> GETTER = (carrier, key) -> {
-    ByteBuffer buf = carrier.get(key);
-    return buf != null ? UTF_8.decode(buf).toString() : null;
-  };
+  static final Propagation.Getter<Map<String, ByteBuffer>, String> GETTER =
+      (carrier, key) -> {
+        ByteBuffer buf = carrier.get(key);
+        return buf != null ? UTF_8.decode(buf).toString() : null;
+      };
 
   abstract Tracer tracer();
 
   abstract TraceContext.Extractor<Map<String, ByteBuffer>> extractor();
 
   static final class Current extends TracingComponent {
-    @Override Tracer tracer() {
+    @Override
+    Tracer tracer() {
       return brave.Tracing.currentTracer();
     }
 
-    @Override TraceContext.Extractor<Map<String, ByteBuffer>> extractor() {
+    @Override
+    TraceContext.Extractor<Map<String, ByteBuffer>> extractor() {
       brave.Tracing tracing = brave.Tracing.current();
       return tracing != null ? tracing.propagation().extractor(GETTER) : null;
     }
@@ -54,11 +57,13 @@ abstract class TracingComponent {
       this.extractor = tracing.propagation().extractor(GETTER);
     }
 
-    @Override Tracer tracer() {
+    @Override
+    Tracer tracer() {
       return tracer;
     }
 
-    @Override TraceContext.Extractor<Map<String, ByteBuffer>> extractor() {
+    @Override
+    TraceContext.Extractor<Map<String, ByteBuffer>> extractor() {
       return extractor;
     }
   }

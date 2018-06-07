@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright 2017-2018 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -43,7 +43,8 @@ public class CassandraClientParser {
       customizer.tag(CassandraTraceKeys.CASSANDRA_KEYSPACE, statement.getKeyspace());
     }
     if (statement instanceof BoundStatement) {
-      customizer.tag(CassandraTraceKeys.CASSANDRA_QUERY,
+      customizer.tag(
+          CassandraTraceKeys.CASSANDRA_QUERY,
           ((BoundStatement) statement).preparedStatement().getQueryString());
     }
   }
@@ -54,8 +55,7 @@ public class CassandraClientParser {
   }
 
   /** Override to parse data from the result set into the span modeling it. */
-  public void response(ResultSet resultSet, SpanCustomizer customizer) {
-  }
+  public void response(ResultSet resultSet, SpanCustomizer customizer) {}
 
   /**
    * Override to change what data from an error are parsed into the span modeling it. Defaults to

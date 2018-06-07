@@ -1,5 +1,5 @@
-/**
- * Copyright 2017 The OpenZipkin Authors
+/*
+ * Copyright 2017-2018 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -16,8 +16,8 @@ package brave.cassandra.driver;
 import brave.Span;
 import brave.Tracer;
 import brave.Tracing;
-import brave.propagation.SamplingFlags;
 import brave.propagation.TraceContext;
+import brave.sampler.Sampler;
 import com.datastax.driver.core.AbstractSession;
 import com.datastax.driver.core.CloseFuture;
 import com.datastax.driver.core.Cluster;
@@ -65,25 +65,30 @@ public final class TracingSession extends AbstractSession {
     sampler = cassandraTracing.sampler();
     parser = cassandraTracing.parser();
     String remoteServiceName = cassandraTracing.remoteServiceName();
-    this.remoteServiceName = remoteServiceName != null
-        ? remoteServiceName
-        : target.getCluster().getClusterName();
-    injector = cassandraTracing.tracing().propagation().injector((carrier, key, v) -> {
-      if (v == null) { // for example, if injecting a null parent id field
-        carrier.remove(key);
-        return;
-      }
-      int length = v.length(); // all values are ascii
-      byte[] buf = new byte[length];
-      for (int i = 0; i < length; i++) {
-        buf[i] = (byte) v.charAt(i);
-      }
-      carrier.put(key, ByteBuffer.wrap(buf));
-    });
+    this.remoteServiceName =
+        remoteServiceName != null ? remoteServiceName : target.getCluster().getClusterName();
+    injector =
+        cassandraTracing
+            .tracing()
+            .propagation()
+            .injector(
+                (carrier, key, v) -> {
+                  if (v == null) { // for example, if injecting a null parent id field
+                    carrier.remove(key);
+                    return;
+                  }
+                  int length = v.length(); // all values are ascii
+                  byte[] buf = new byte[length];
+                  for (int i = 0; i < length; i++) {
+                    buf[i] = (byte) v.charAt(i);
+                  }
+                  carrier.put(key, ByteBuffer.wrap(buf));
+                });
     version = delegate.getCluster().getConfiguration().getProtocolOptions().getProtocolVersion();
   }
 
-  @Override public ResultSetFuture executeAsync(Statement statement) {
+  @Override
+  public ResultSetFuture executeAsync(Statement statement) {
     Span span = nextSpan(statement);
     if (!span.isNoop()) parser.request(statement, span.kind(CLIENT));
 
@@ -109,24 +114,28 @@ public final class TracingSession extends AbstractSession {
       throw e;
     }
     if (span.isNoop()) return result; // don't add callback on noop
-    Futures.addCallback(result, new FutureCallback<ResultSet>() {
-      @Override public void onSuccess(ResultSet result) {
-        InetSocketAddress host = result.getExecutionInfo().getQueriedHost().getSocketAddress();
-        span.remoteEndpoint(Endpoint.newBuilder()
-            .serviceName(remoteServiceName)
-            .ip(host.getAddress())
-            .port(host.getPort())
-            .build()
-        );
-        parser.response(result, span);
-        span.finish();
-      }
+    Futures.addCallback(
+        result,
+        new FutureCallback<ResultSet>() {
+          @Override
+          public void onSuccess(ResultSet result) {
+            InetSocketAddress host = result.getExecutionInfo().getQueriedHost().getSocketAddress();
+            span.remoteEndpoint(
+                Endpoint.newBuilder()
+                    .serviceName(remoteServiceName)
+                    .ip(host.getAddress())
+                    .port(host.getPort())
+                    .build());
+            parser.response(result, span);
+            span.finish();
+          }
 
-      @Override public void onFailure(Throwable e) {
-        parser.error(e, span);
-        span.finish();
-      }
-    });
+          @Override
+          public void onFailure(Throwable e) {
+            parser.error(e, span);
+            span.finish();
+          }
+        });
     return result;
   }
 
@@ -137,49 +146,59 @@ public final class TracingSession extends AbstractSession {
     // If there was no parent, we are making a new trace. Try to sample the request.
     Boolean sampled = sampler.trySample(statement);
     if (sampled == null) return tracer.newTrace(); // defer sampling decision to trace ID
-    return tracer.newTrace(sampled ? SamplingFlags.SAMPLED : SamplingFlags.NOT_SAMPLED);
+    return tracer.withSampler(sampled ? Sampler.ALWAYS_SAMPLE : Sampler.NEVER_SAMPLE).nextSpan();
   }
 
-  @Override protected ListenableFuture<PreparedStatement> prepareAsync(String query,
-      Map<String, ByteBuffer> customPayload) {
+  @Override
+  protected ListenableFuture<PreparedStatement> prepareAsync(
+      String query, Map<String, ByteBuffer> customPayload) {
     SimpleStatement statement = new SimpleStatement(query);
     statement.setOutgoingPayload(customPayload);
     return prepareAsync(statement);
   }
 
-  @Override public ListenableFuture<PreparedStatement> prepareAsync(String query) {
+  @Override
+  public ListenableFuture<PreparedStatement> prepareAsync(String query) {
     return delegate.prepareAsync(query);
   }
 
-  @Override public String getLoggedKeyspace() {
+  @Override
+  public String getLoggedKeyspace() {
     return delegate.getLoggedKeyspace();
   }
 
-  @Override public Session init() {
+  @Override
+  public Session init() {
     return delegate.init();
   }
 
-  @Override public ListenableFuture<Session> initAsync() {
+  @Override
+  public ListenableFuture<Session> initAsync() {
     return delegate.initAsync();
   }
 
-  @Override public ListenableFuture<PreparedStatement> prepareAsync(RegularStatement statement) {
+  @Override
+  public ListenableFuture<PreparedStatement> prepareAsync(RegularStatement statement) {
     return delegate.prepareAsync(statement);
   }
 
-  @Override public CloseFuture closeAsync() {
+  @Override
+  public CloseFuture closeAsync() {
     return delegate.closeAsync();
   }
 
-  @Override public boolean isClosed() {
+  @Override
+  public boolean isClosed() {
     return delegate.isClosed();
   }
 
-  @Override public Cluster getCluster() {
+  @Override
+  public Cluster getCluster() {
     return delegate.getCluster();
   }
 
-  @Override public State getState() {
+  @Override
+  public State getState() {
     return delegate.getState();
   }
 }

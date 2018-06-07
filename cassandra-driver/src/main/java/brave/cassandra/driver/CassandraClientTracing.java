@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright 2017-2018 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -41,14 +41,16 @@ public abstract class CassandraClientTracing {
    * <p>As this is endpoint-specific, it is typical to create a scoped instance of {@linkplain
    * CassandraClientTracing} to assign this value.
    *
-   * For example:
+   * <p>For example:
+   *
    * <pre>{@code
    * production = TracingSession.create(httpTracing.remoteServiceName("production"));
    * }</pre>
    *
    * @see brave.Span#remoteEndpoint(zipkin2.Endpoint)
    */
-  @Nullable public abstract String remoteServiceName();
+  @Nullable
+  public abstract String remoteServiceName();
 
   /**
    * Scopes this component for a client of the indicated server.
@@ -68,7 +70,7 @@ public abstract class CassandraClientTracing {
   public abstract Builder toBuilder();
 
   @AutoValue.Builder
-  public static abstract class Builder {
+  public abstract static class Builder {
     /** @see CassandraClientTracing#tracing() */
     public abstract Builder tracing(Tracing tracing);
 
@@ -82,10 +84,8 @@ public abstract class CassandraClientTracing {
 
     abstract Builder remoteServiceName(@Nullable String remoteServiceName);
 
-    Builder() {
-    }
+    Builder() {}
   }
 
-  CassandraClientTracing() {
-  }
+  CassandraClientTracing() {}
 }
