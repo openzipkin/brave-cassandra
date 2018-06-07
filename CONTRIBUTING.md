@@ -14,7 +14,7 @@ All files are released with the Apache 2.0 license.
 If you are adding a new file it should have a header like below. This can be automatically added by running `./mvnw com.mycila:license-maven-plugin:format`.
 
 ```
-/**
+/*
  * Copyright 2017 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except

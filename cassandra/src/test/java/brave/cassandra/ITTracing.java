@@ -1,5 +1,5 @@
-/**
- * Copyright 2017 The OpenZipkin Authors
+/*
+ * Copyright 2017-2018 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -13,15 +13,14 @@
  */
 package brave.cassandra;
 
-import brave.Tracer;
+import brave.ScopedSpan;
 import brave.cassandra.driver.TracingSession;
-import brave.propagation.SamplingFlags;
+import brave.sampler.Sampler;
 import cassandra.CassandraRule;
 import com.datastax.driver.core.BoundStatement;
 import com.datastax.driver.core.Cluster;
 import com.datastax.driver.core.Session;
 import com.datastax.driver.core.Statement;
-import java.io.IOException;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
@@ -41,110 +40,114 @@ public class ITTracing {
   @ClassRule public static CassandraRule cassandra = new CassandraRule();
 
   ConcurrentLinkedDeque<Span> spans = new ConcurrentLinkedDeque<>();
-  brave.Tracing tracing = brave.Tracing.newBuilder()
-      .localServiceName("cassandra")
-      .spanReporter(spans::add)
-      .build();
+  brave.Tracing tracing =
+      brave.Tracing.newBuilder().localServiceName("cassandra").spanReporter(spans::add).build();
 
-  @After public void after() {
+  @After
+  public void after() {
     tracing.close();
   }
 
-  @Test public void doesntTraceWhenTracingDisabled() throws IOException {
-    execute(session -> session
-        .prepare("SELECT * from system.schema_keyspaces").bind());
+  @Test
+  public void doesntTraceWhenTracingDisabled() {
+    execute(session -> session.prepare("SELECT * from system.schema_keyspaces").bind());
 
     assertThat(spans).isEmpty();
   }
 
-  @Test public void startsNewTraceWhenTracingEnabled() throws IOException {
-    execute(session -> session
-        .prepare("SELECT * from system.schema_keyspaces")
-        .enableTracing().setOutgoingPayload(new LinkedHashMap<>()).bind());
+  @Test
+  public void startsNewTraceWhenTracingEnabled() {
+    execute(
+        session ->
+            session
+                .prepare("SELECT * from system.schema_keyspaces")
+                .enableTracing()
+                .setOutgoingPayload(new LinkedHashMap<>())
+                .bind());
 
     assertThat(spans).hasSize(1);
   }
 
-  @Test public void startsNewTraceWhenTracingEnabled_noPayload() throws IOException {
-    execute(session -> session
-        .prepare("SELECT * from system.schema_keyspaces")
-        .enableTracing().bind());
+  @Test
+  public void startsNewTraceWhenTracingEnabled_noPayload() {
+    execute(
+        session -> session.prepare("SELECT * from system.schema_keyspaces").enableTracing().bind());
 
     assertThat(spans).hasSize(1);
   }
 
-  @Test public void samplingDisabled() throws IOException {
-    brave.Span unsampled = tracing.tracer().newTrace(SamplingFlags.NOT_SAMPLED);
-    try (Tracer.SpanInScope ws = tracing.tracer().withSpanInScope(unsampled)) {
-      executeTraced(session -> session
-          .prepare("SELECT * from system.schema_keyspaces").bind());
+  @Test
+  public void samplingDisabled() {
+    ScopedSpan unsampled =
+        tracing.tracer().withSampler(Sampler.NEVER_SAMPLE).startScopedSpan("unsampled");
+    try {
+      executeTraced(session -> session.prepare("SELECT * from system.schema_keyspaces").bind());
+    } finally {
+      unsampled.finish();
     }
 
     assertThat(spans).isEmpty();
   }
 
-  @Test public void usesExistingTraceId() throws Exception {
-    executeTraced(session -> session
-        .prepare("SELECT * from system.schema_keyspaces").bind());
+  @Test
+  public void usesExistingTraceId() throws Exception {
+    executeTraced(session -> session.prepare("SELECT * from system.schema_keyspaces").bind());
 
     assertThat(spans)
         .flatExtracting(Span::kind)
         .containsOnlyOnce(Span.Kind.SERVER, Span.Kind.CLIENT);
   }
 
-  @Test public void reportsServerKindToZipkin() throws Exception {
-    execute(session -> session
-        .prepare("SELECT * from system.schema_keyspaces")
-        .enableTracing().bind());
+  @Test
+  public void reportsServerKindToZipkin() throws Exception {
+    execute(
+        session -> session.prepare("SELECT * from system.schema_keyspaces").enableTracing().bind());
 
-    assertThat(spans)
-        .flatExtracting(Span::kind)
-        .containsOnlyOnce(Span.Kind.SERVER);
+    assertThat(spans).flatExtracting(Span::kind).containsOnlyOnce(Span.Kind.SERVER);
   }
 
-  @Test public void defaultSpanNameIsType() throws Exception {
-    execute(session -> session
-        .prepare("SELECT * from system.schema_keyspaces")
-        .enableTracing().bind());
+  @Test
+  public void defaultSpanNameIsType() throws Exception {
+    execute(
+        session -> session.prepare("SELECT * from system.schema_keyspaces").enableTracing().bind());
 
-    assertThat(spans)
-        .extracting(Span::name)
-        .containsExactly("query");
+    assertThat(spans).extracting(Span::name).containsExactly("query");
   }
 
-  @Test public void defaultRequestTags() throws Exception {
-    execute(session -> session
-        .prepare("SELECT * from system.schema_keyspaces")
-        .enableTracing().bind());
+  @Test
+  public void defaultRequestTags() throws Exception {
+    execute(
+        session -> session.prepare("SELECT * from system.schema_keyspaces").enableTracing().bind());
 
     assertThat(spans)
         .flatExtracting(s -> s.tags().keySet())
         .contains("cassandra.request", "cassandra.session_id");
   }
 
-  @Test public void reportsClientAddress() throws Exception {
-    execute(session -> session
-        .prepare("SELECT * from system.schema_keyspaces")
-        .enableTracing().bind());
+  @Test
+  public void reportsClientAddress() throws Exception {
+    execute(
+        session -> session.prepare("SELECT * from system.schema_keyspaces").enableTracing().bind());
 
-    assertThat(spans)
-        .flatExtracting(Span::remoteEndpoint)
-        .hasSize(1)
-        .doesNotContainNull();
+    assertThat(spans).flatExtracting(Span::remoteEndpoint).hasSize(1).doesNotContainNull();
   }
 
   void execute(Function<Session, BoundStatement> statement) {
-    try (Cluster cluster = Cluster.builder()
-        .addContactPointsWithPorts(Collections.singleton(cassandra.contactPoint()))
-        .build(); Session session = cluster.connect()) {
+    try (Cluster cluster =
+            Cluster.builder()
+                .addContactPointsWithPorts(Collections.singleton(cassandra.contactPoint()))
+                .build();
+        Session session = cluster.connect()) {
       session.execute(statement.apply(session));
     }
   }
 
   void executeTraced(Function<Session, Statement> statement) {
-    try (Cluster cluster = Cluster.builder()
-        .addContactPointsWithPorts(Collections.singleton(cassandra.contactPoint()))
-        .build(); Session session = TracingSession.create(tracing, cluster.connect())) {
+    try (Cluster cluster =
+            Cluster.builder()
+                .addContactPointsWithPorts(Collections.singleton(cassandra.contactPoint()))
+                .build();
+        Session session = TracingSession.create(tracing, cluster.connect())) {
       session.execute(statement.apply(session));
     }
   }

@@ -1,5 +1,5 @@
-/**
- * Copyright 2017 The OpenZipkin Authors
+/*
+ * Copyright 2017-2018 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -17,12 +17,11 @@ public final class CassandraTraceKeys {
   public static final String CASSANDRA_KEYSPACE = "cassandra.keyspace";
 
   /**
-   * The CQL query in a statement.  Ex. "select * from customers where id = ?"
+   * The CQL query in a statement. Ex. "select * from customers where id = ?"
    *
    * <p>Used to understand the complexity of a request
    */
   public static final String CASSANDRA_QUERY = "cassandra.query";
 
-  private CassandraTraceKeys() {
-  }
+  private CassandraTraceKeys() {}
 }

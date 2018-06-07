@@ -1,5 +1,5 @@
-/**
- * Copyright 2017 The OpenZipkin Authors
+/*
+ * Copyright 2017-2018 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -58,16 +58,19 @@ public class ITTracingSession {
   Session session;
   PreparedStatement prepared;
 
-  @Before public void setup() throws IOException {
+  @Before
+  public void setup() throws IOException {
     tracing = tracingBuilder(Sampler.ALWAYS_SAMPLE).build();
-    cluster = Cluster.builder()
-        .addContactPointsWithPorts(Collections.singleton(cassandra.contactPoint()))
-        .build();
+    cluster =
+        Cluster.builder()
+            .addContactPointsWithPorts(Collections.singleton(cassandra.contactPoint()))
+            .build();
     session = newSession();
     CustomPayloadCaptor.ref.set(null);
   }
 
-  @After public void close() throws Exception {
+  @After
+  public void close() throws Exception {
     if (session != null) session.close();
     if (cluster != null) cluster.close();
     if (tracing != null) tracing.close();
@@ -80,7 +83,8 @@ public class ITTracingSession {
     return result;
   }
 
-  @Test public void makesChildOfCurrentSpan() throws Exception {
+  @Test
+  public void makesChildOfCurrentSpan() throws Exception {
     brave.Span parent = tracing.tracer().newTrace().name("test").start();
     try (Tracer.SpanInScope ws = tracing.tracer().withSpanInScope(parent)) {
       invokeBoundStatement();
@@ -88,26 +92,26 @@ public class ITTracingSession {
       parent.finish();
     }
 
-    assertThat(spans)
-        .extracting(Span::traceId)
-        .contains(parent.context().traceIdString());
+    assertThat(spans).extracting(Span::traceId).contains(parent.context().traceIdString());
   }
 
   // CASSANDRA-12835 particularly is in 3.11, which fixes simple (non-bound) statement tracing
-  @Test public void propagatesTraceIds_regularStatement() throws Exception {
+  @Test
+  public void propagatesTraceIds_regularStatement() throws Exception {
     session.execute("SELECT * from system.schema_keyspaces");
-    assertThat(CustomPayloadCaptor.ref.get())
-        .isEmpty();
+    assertThat(CustomPayloadCaptor.ref.get()).isEmpty();
   }
 
-  @Test public void propagatesTraceIds() throws Exception {
+  @Test
+  public void propagatesTraceIds() throws Exception {
     invokeBoundStatement();
 
     assertThat(CustomPayloadCaptor.ref.get().keySet())
         .containsExactly("X-B3-SpanId", "X-B3-Sampled", "X-B3-TraceId");
   }
 
-  @Test public void propagatesSampledFalse() throws Exception {
+  @Test
+  public void propagatesSampledFalse() throws Exception {
     tracing = tracingBuilder(Sampler.NEVER_SAMPLE).build();
     session.close();
     session = newSession();
@@ -118,7 +122,8 @@ public class ITTracingSession {
         .containsExactly('0');
   }
 
-  @Test public void reportsClientAnnotationsToZipkin() throws Exception {
+  @Test
+  public void reportsClientAnnotationsToZipkin() throws Exception {
     invokeBoundStatement();
 
     assertThat(spans)
@@ -127,15 +132,15 @@ public class ITTracingSession {
         .containsExactly("cs", "cr");
   }
 
-  @Test public void defaultSpanNameIsQuery() throws Exception {
+  @Test
+  public void defaultSpanNameIsQuery() throws Exception {
     invokeBoundStatement();
 
-    assertThat(spans)
-        .extracting(Span::name)
-        .containsExactly("bound-statement");
+    assertThat(spans).extracting(Span::name).containsExactly("bound-statement");
   }
 
-  @Test public void reportsSpanOnTransportException() throws Exception {
+  @Test
+  public void reportsSpanOnTransportException() throws Exception {
     cluster.close();
 
     try {
@@ -147,7 +152,8 @@ public class ITTracingSession {
     assertThat(spans).hasSize(1);
   }
 
-  @Test public void addsErrorTag_onTransportException() throws Exception {
+  @Test
+  public void addsErrorTag_onTransportException() throws Exception {
     reportsSpanOnTransportException();
 
     assertThat(spans)
@@ -155,31 +161,36 @@ public class ITTracingSession {
         .containsOnlyOnce(entry("error", "All host(s) tried for query failed (no host was tried)"));
   }
 
-  @Test public void addsErrorTag_onCanceledFuture() throws Exception {
+  @Test
+  public void addsErrorTag_onCanceledFuture() throws Exception {
     ResultSetFuture resp = session.executeAsync("SELECT * from system.schema_keyspaces");
     assumeTrue("lost race on cancel", resp.cancel(true));
 
     close(); // blocks until the cancel finished
 
-    assertThat(spans).flatExtracting(s -> s.tags().entrySet())
+    assertThat(spans)
+        .flatExtracting(s -> s.tags().entrySet())
         .containsOnlyOnce(entry("error", "Task was cancelled."));
   }
 
-  @Test public void reportsServerAddress() throws Exception {
+  @Test
+  public void reportsServerAddress() throws Exception {
     invokeBoundStatement();
 
     assertThat(spans)
         .flatExtracting(Span::remoteEndpoint)
-        .containsExactly(Endpoint.newBuilder()
-            .serviceName(cluster.getClusterName())
-            .ip("127.0.0.1")
-            .port(cassandra.contactPoint().getPort()).build()
-        );
+        .containsExactly(
+            Endpoint.newBuilder()
+                .serviceName(cluster.getClusterName())
+                .ip("127.0.0.1")
+                .port(cassandra.contactPoint().getPort())
+                .build());
   }
 
-  @Test public void customSampler() throws Exception {
-    cassandraTracing = cassandraTracing.toBuilder()
-        .sampler(CassandraClientSampler.NEVER_SAMPLE).build();
+  @Test
+  public void customSampler() throws Exception {
+    cassandraTracing =
+        cassandraTracing.toBuilder().sampler(CassandraClientSampler.NEVER_SAMPLE).build();
     session = TracingSession.create(cassandraTracing, ((TracingSession) session).delegate);
 
     invokeBoundStatement();
@@ -187,35 +198,41 @@ public class ITTracingSession {
     assertThat(spans).isEmpty();
   }
 
-  @Test public void supportsCustomization() throws Exception {
-    cassandraTracing = cassandraTracing.toBuilder()
-        .parser(new CassandraClientParser() {
-          @Override public String spanName(Statement statement) {
-            return "query";
-          }
+  @Test
+  public void supportsCustomization() throws Exception {
+    cassandraTracing =
+        cassandraTracing
+            .toBuilder()
+            .parser(
+                new CassandraClientParser() {
+                  @Override
+                  public String spanName(Statement statement) {
+                    return "query";
+                  }
 
-          @Override public void request(Statement statement, SpanCustomizer customizer) {
-            super.request(statement, customizer);
-            customizer.tag("cassandra.fetch_size", Integer.toString(statement.getFetchSize()));
-          }
+                  @Override
+                  public void request(Statement statement, SpanCustomizer customizer) {
+                    super.request(statement, customizer);
+                    customizer.tag(
+                        "cassandra.fetch_size", Integer.toString(statement.getFetchSize()));
+                  }
 
-          @Override public void response(ResultSet resultSet, SpanCustomizer customizer) {
-            customizer.tag("cassandra.available_without_fetching",
-                Integer.toString(resultSet.getAvailableWithoutFetching()));
-          }
-        })
-        .build().clientOf("remote-cluster");
+                  @Override
+                  public void response(ResultSet resultSet, SpanCustomizer customizer) {
+                    customizer.tag(
+                        "cassandra.available_without_fetching",
+                        Integer.toString(resultSet.getAvailableWithoutFetching()));
+                  }
+                })
+            .build()
+            .clientOf("remote-cluster");
     session = TracingSession.create(cassandraTracing, ((TracingSession) session).delegate);
 
     invokeBoundStatement();
 
-    assertThat(spans)
-        .extracting(Span::name)
-        .containsExactly("query");
+    assertThat(spans).extracting(Span::name).containsExactly("query");
 
-    assertThat(spans)
-        .flatExtracting(Span::remoteServiceName)
-        .containsExactly("remote-cluster");
+    assertThat(spans).flatExtracting(Span::remoteServiceName).containsExactly("remote-cluster");
   }
 
   void invokeBoundStatement() {

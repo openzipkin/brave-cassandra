@@ -1,5 +1,5 @@
-/**
- * Copyright 2017 The OpenZipkin Authors
+/*
+ * Copyright 2017-2018 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -62,7 +62,9 @@ public class CassandraRule extends ExternalResource {
 
   private static void cleanup() {
     // clean up commitlog
-    String[] directoryNames = {DatabaseDescriptor.getCommitLogLocation(),};
+    String[] directoryNames = {
+      DatabaseDescriptor.getCommitLogLocation(),
+    };
     for (String dirName : directoryNames) {
       File dir = new File(dirName);
       if (!dir.exists()) {
@@ -95,7 +97,8 @@ public class CassandraRule extends ExternalResource {
     FileUtils.delete(cachesDir.listFiles());
   }
 
-  @Override protected void before() throws Throwable {
+  @Override
+  protected void before() throws Throwable {
     if (server != null) return;
 
     DatabaseDescriptor.daemonInitialization();
@@ -116,7 +119,8 @@ public class CassandraRule extends ExternalResource {
     server.start();
   }
 
-  @Override protected void after() {
+  @Override
+  protected void after() {
     if (server != null) server.stop();
   }
 }
