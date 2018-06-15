@@ -40,12 +40,17 @@ import zipkin2.Endpoint;
 
 import static brave.Span.Kind.CLIENT;
 
-public final class TracingSession extends AbstractSession {
+public class TracingSession extends AbstractSession {
   public static Session create(Tracing tracing, Session delegate) {
     return new TracingSession(CassandraClientTracing.create(tracing), delegate);
   }
 
   public static Session create(CassandraClientTracing cassandraTracing, Session delegate) {
+    ProtocolVersion version =
+        delegate.getCluster().getConfiguration().getProtocolOptions().getProtocolVersion();
+    if (version.compareTo(ProtocolVersion.V4) >= 0 && cassandraTracing.propagationEnabled()) {
+      return new PropagatingTracingSession(cassandraTracing, delegate);
+    }
     return new TracingSession(cassandraTracing, delegate);
   }
 
@@ -53,8 +58,6 @@ public final class TracingSession extends AbstractSession {
   final CassandraClientSampler sampler;
   final CassandraClientParser parser;
   final String remoteServiceName;
-  final TraceContext.Injector<Map<String, ByteBuffer>> injector;
-  final ProtocolVersion version;
   final Session delegate;
 
   TracingSession(CassandraClientTracing cassandraTracing, Session target) {
@@ -67,24 +70,6 @@ public final class TracingSession extends AbstractSession {
     String remoteServiceName = cassandraTracing.remoteServiceName();
     this.remoteServiceName =
         remoteServiceName != null ? remoteServiceName : target.getCluster().getClusterName();
-    injector =
-        cassandraTracing
-            .tracing()
-            .propagation()
-            .injector(
-                (carrier, key, v) -> {
-                  if (v == null) { // for example, if injecting a null parent id field
-                    carrier.remove(key);
-                    return;
-                  }
-                  int length = v.length(); // all values are ascii
-                  byte[] buf = new byte[length];
-                  for (int i = 0; i < length; i++) {
-                    buf[i] = (byte) v.charAt(i);
-                  }
-                  carrier.put(key, ByteBuffer.wrap(buf));
-                });
-    version = delegate.getCluster().getConfiguration().getProtocolOptions().getProtocolVersion();
   }
 
   @Override
@@ -92,16 +77,7 @@ public final class TracingSession extends AbstractSession {
     Span span = nextSpan(statement);
     if (!span.isNoop()) parser.request(statement, span.kind(CLIENT));
 
-    // o.a.c.tracing.Tracing.newSession must use the same propagation format
-    if (version.compareTo(ProtocolVersion.V4) >= 0) {
-      statement.enableTracing();
-      Map<String, ByteBuffer> payload = new LinkedHashMap<>();
-      if (statement.getOutgoingPayload() != null) {
-        payload.putAll(statement.getOutgoingPayload());
-      }
-      injector.inject(span.context(), payload);
-      statement.setOutgoingPayload(payload);
-    }
+    maybeDecorate(statement, span);
 
     span.start();
     ResultSetFuture result;
@@ -138,6 +114,8 @@ public final class TracingSession extends AbstractSession {
         });
     return result;
   }
+
+  void maybeDecorate(Statement statement, Span span) {}
 
   /** Creates a potentially noop span representing this request */
   Span nextSpan(Statement statement) {
@@ -200,5 +178,42 @@ public final class TracingSession extends AbstractSession {
   @Override
   public State getState() {
     return delegate.getState();
+  }
+
+  // o.a.c.tracing.Tracing.newSession must use the same propagation format
+  static final class PropagatingTracingSession extends TracingSession {
+    final TraceContext.Injector<Map<String, ByteBuffer>> injector;
+
+    PropagatingTracingSession(CassandraClientTracing cassandraTracing, Session target) {
+      super(cassandraTracing, target);
+      injector =
+          cassandraTracing
+              .tracing()
+              .propagation()
+              .injector(
+                  (carrier, key, v) -> {
+                    if (v == null) { // for example, if injecting a null parent id field
+                      carrier.remove(key);
+                      return;
+                    }
+                    int length = v.length(); // all values are ascii
+                    byte[] buf = new byte[length];
+                    for (int i = 0; i < length; i++) {
+                      buf[i] = (byte) v.charAt(i);
+                    }
+                    carrier.put(key, ByteBuffer.wrap(buf));
+                  });
+    }
+
+    @Override
+    void maybeDecorate(Statement statement, Span span) {
+      statement.enableTracing();
+      Map<String, ByteBuffer> payload = new LinkedHashMap<>();
+      if (statement.getOutgoingPayload() != null) {
+        payload.putAll(statement.getOutgoingPayload());
+      }
+      injector.inject(span.context(), payload);
+      statement.setOutgoingPayload(payload);
+    }
   }
 }

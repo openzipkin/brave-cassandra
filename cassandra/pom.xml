@@ -38,7 +38,6 @@
     <dependency>
       <groupId>io.zipkin.reporter2</groupId>
       <artifactId>zipkin-sender-urlconnection</artifactId>
-      <version>${zipkin-reporter.version}</version>
     </dependency>
     <dependency>
       <groupId>${project.groupId}</groupId>

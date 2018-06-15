@@ -34,7 +34,6 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
-import zipkin2.Annotation;
 import zipkin2.Endpoint;
 import zipkin2.Span;
 
@@ -98,12 +97,22 @@ public class ITTracingSession {
   // CASSANDRA-12835 particularly is in 3.11, which fixes simple (non-bound) statement tracing
   @Test
   public void propagatesTraceIds_regularStatement() throws Exception {
+    cassandraTracing = CassandraClientTracing.newBuilder(tracing).propagationEnabled(true).build();
+    session.close();
+    session = TracingSession.create(cassandraTracing, cluster.connect());
+
     session.execute("SELECT * from system.schema_keyspaces");
-    assertThat(CustomPayloadCaptor.ref.get()).isEmpty();
+
+    assertThat(CustomPayloadCaptor.ref.get().keySet())
+        .containsExactly("X-B3-SpanId", "X-B3-Sampled", "X-B3-TraceId");
   }
 
   @Test
   public void propagatesTraceIds() throws Exception {
+    cassandraTracing = CassandraClientTracing.newBuilder(tracing).propagationEnabled(true).build();
+    session.close();
+    session = TracingSession.create(cassandraTracing, cluster.connect());
+
     invokeBoundStatement();
 
     assertThat(CustomPayloadCaptor.ref.get().keySet())
@@ -111,25 +120,34 @@ public class ITTracingSession {
   }
 
   @Test
+  public void propagationDisabledByDefault() throws Exception {
+    invokeBoundStatement();
+
+    assertThat(CustomPayloadCaptor.ref.get())
+        .isNull();
+  }
+
+  @Test
   public void propagatesSampledFalse() throws Exception {
     tracing = tracingBuilder(Sampler.NEVER_SAMPLE).build();
+    cassandraTracing = CassandraClientTracing.newBuilder(tracing).propagationEnabled(true).build();
+
     session.close();
-    session = newSession();
+    session = TracingSession.create(cassandraTracing, cluster.connect());
+    prepared = session.prepare("SELECT * from system.schema_keyspaces");
+
     invokeBoundStatement();
 
     assertThat(CustomPayloadCaptor.ref.get().get("X-B3-Sampled"))
         .extracting(ByteBuffer::get)
-        .containsExactly('0');
+        .containsExactly((byte) '0');
   }
 
   @Test
-  public void reportsClientAnnotationsToZipkin() throws Exception {
+  public void reportsClientKindToZipkin() throws Exception {
     invokeBoundStatement();
 
-    assertThat(spans)
-        .flatExtracting(Span::annotations)
-        .extracting(Annotation::value)
-        .containsExactly("cs", "cr");
+    assertThat(spans).flatExtracting(Span::kind).containsExactly(Span.Kind.CLIENT);
   }
 
   @Test
