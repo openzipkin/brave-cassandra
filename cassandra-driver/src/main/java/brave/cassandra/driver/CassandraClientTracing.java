@@ -27,7 +27,8 @@ public abstract class CassandraClientTracing {
     return new AutoValue_CassandraClientTracing.Builder()
         .tracing(tracing)
         .parser(new CassandraClientParser())
-        .sampler(CassandraClientSampler.TRACE_ID);
+        .sampler(CassandraClientSampler.TRACE_ID)
+        .propagationEnabled(false);
   }
 
   public abstract Tracing tracing();
@@ -62,6 +63,15 @@ public abstract class CassandraClientTracing {
   }
 
   /**
+   * When true, trace contexts will be propagated downstream based on the {@link
+   * Tracing#propagationFactory() configured implementation}.
+   *
+   * <p>Warning: sometimes this can cause connection failures. As such, consider this feature
+   * experimental.
+   */
+  public abstract boolean propagationEnabled();
+
+  /**
    * Returns an overriding sampling decision for a new trace. Defaults to ignore the request and use
    * the {@link CassandraClientSampler#TRACE_ID trace ID instead}.
    */
@@ -79,6 +89,9 @@ public abstract class CassandraClientTracing {
 
     /** @see CassandraClientTracing#sampler() */
     public abstract Builder sampler(CassandraClientSampler sampler);
+
+    /** @see CassandraClientTracing#propagationEnabled() */
+    public abstract Builder propagationEnabled(boolean propagationEnabled);
 
     public abstract CassandraClientTracing build();
 

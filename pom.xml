@@ -37,8 +37,7 @@
     <main.signature.artifact>java17</main.signature.artifact>
 
     <main.basedir>${project.basedir}</main.basedir>
-    <brave.version>5.0.0</brave.version>
-    <zipkin-reporter.version>2.6.1</zipkin-reporter.version>
+    <brave.version>5.1.0</brave.version>
 
     <license-maven-plugin.version>2.11</license-maven-plugin.version>
   </properties>
@@ -97,6 +96,13 @@
   <dependencyManagement>
     <dependencies>
       <dependency>
+        <groupId>io.zipkin.brave</groupId>
+        <artifactId>brave-bom</artifactId>
+        <version>${brave.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+      <dependency>
         <groupId>org.apache.cassandra</groupId>
         <artifactId>cassandra-all</artifactId>
         <version>3.11.2</version>
@@ -133,7 +139,6 @@
     <dependency>
       <groupId>io.zipkin.brave</groupId>
       <artifactId>brave</artifactId>
-      <version>${brave.version}</version>
     </dependency>
 
     <!-- don't worry. auto-* are source retention, not runtime -->
