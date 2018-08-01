@@ -14,7 +14,7 @@
 package brave.cassandra;
 
 import brave.Tracer;
-import brave.propagation.Propagation;
+import brave.propagation.Propagation.Getter;
 import brave.propagation.TraceContext;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
@@ -24,10 +24,16 @@ abstract class TracingComponent {
   static final Charset UTF_8 = Charset.forName("UTF-8");
 
   /** Getter that pulls trace fields from ascii values */
-  static final Propagation.Getter<Map<String, ByteBuffer>, String> GETTER =
-      (carrier, key) -> {
-        ByteBuffer buf = carrier.get(key);
-        return buf != null ? UTF_8.decode(buf).toString() : null;
+  static final Getter<Map<String, ByteBuffer>, String> GETTER =
+      new Getter<Map<String, ByteBuffer>, String>() {
+        @Override public String get(Map<String, ByteBuffer> carrier, String key) {
+          ByteBuffer buf = carrier.get(key);
+          return buf != null ? UTF_8.decode(buf).toString() : null;
+        }
+
+        @Override public String toString() {
+          return "Map::get";
+        }
       };
 
   abstract Tracer tracer();
