@@ -130,8 +130,6 @@ workflows:
             tags:
               only: /\d+\.\d+\.\d+/
       - trigger_publish:
-          requires:
-            - build
           filters:
             branches:
               ignore: /.*/
