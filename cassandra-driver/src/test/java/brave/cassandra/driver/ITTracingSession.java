@@ -16,7 +16,8 @@ package brave.cassandra.driver;
 import brave.SpanCustomizer;
 import brave.Tracer;
 import brave.Tracing;
-import brave.propagation.StrictCurrentTraceContext;
+import brave.propagation.StrictScopeDecorator;
+import brave.propagation.ThreadLocalCurrentTraceContext;
 import brave.sampler.Sampler;
 import cassandra.CassandraRule;
 import com.datastax.driver.core.Cluster;
@@ -26,7 +27,6 @@ import com.datastax.driver.core.ResultSetFuture;
 import com.datastax.driver.core.Session;
 import com.datastax.driver.core.Statement;
 import com.datastax.driver.core.exceptions.NoHostAvailableException;
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.concurrent.ConcurrentLinkedDeque;
@@ -58,7 +58,7 @@ public class ITTracingSession {
   PreparedStatement prepared;
 
   @Before
-  public void setup() throws IOException {
+  public void setup() {
     tracing = tracingBuilder(Sampler.ALWAYS_SAMPLE).build();
     cluster =
         Cluster.builder()
@@ -69,7 +69,7 @@ public class ITTracingSession {
   }
 
   @After
-  public void close() throws Exception {
+  public void close() {
     if (session != null) session.close();
     if (cluster != null) cluster.close();
     if (tracing != null) tracing.close();
@@ -83,7 +83,7 @@ public class ITTracingSession {
   }
 
   @Test
-  public void makesChildOfCurrentSpan() throws Exception {
+  public void makesChildOfCurrentSpan() {
     brave.Span parent = tracing.tracer().newTrace().name("test").start();
     try (Tracer.SpanInScope ws = tracing.tracer().withSpanInScope(parent)) {
       invokeBoundStatement();
@@ -96,7 +96,7 @@ public class ITTracingSession {
 
   // CASSANDRA-12835 particularly is in 3.11, which fixes simple (non-bound) statement tracing
   @Test
-  public void propagatesTraceIds_regularStatement() throws Exception {
+  public void propagatesTraceIds_regularStatement() {
     cassandraTracing = CassandraClientTracing.newBuilder(tracing).propagationEnabled(true).build();
     session.close();
     session = TracingSession.create(cassandraTracing, cluster.connect());
@@ -108,7 +108,7 @@ public class ITTracingSession {
   }
 
   @Test
-  public void propagatesTraceIds() throws Exception {
+  public void propagatesTraceIds() {
     cassandraTracing = CassandraClientTracing.newBuilder(tracing).propagationEnabled(true).build();
     session.close();
     session = TracingSession.create(cassandraTracing, cluster.connect());
@@ -120,7 +120,7 @@ public class ITTracingSession {
   }
 
   @Test
-  public void propagationDisabledByDefault() throws Exception {
+  public void propagationDisabledByDefault() {
     invokeBoundStatement();
 
     assertThat(CustomPayloadCaptor.ref.get())
@@ -128,7 +128,7 @@ public class ITTracingSession {
   }
 
   @Test
-  public void propagatesSampledFalse() throws Exception {
+  public void propagatesSampledFalse() {
     tracing = tracingBuilder(Sampler.NEVER_SAMPLE).build();
     cassandraTracing = CassandraClientTracing.newBuilder(tracing).propagationEnabled(true).build();
 
@@ -140,25 +140,25 @@ public class ITTracingSession {
 
     assertThat(CustomPayloadCaptor.ref.get().get("X-B3-Sampled"))
         .extracting(ByteBuffer::get)
-        .containsExactly((byte) '0');
+        .isEqualTo((byte) '0');
   }
 
   @Test
-  public void reportsClientKindToZipkin() throws Exception {
+  public void reportsClientKindToZipkin() {
     invokeBoundStatement();
 
     assertThat(spans).flatExtracting(Span::kind).containsExactly(Span.Kind.CLIENT);
   }
 
   @Test
-  public void defaultSpanNameIsQuery() throws Exception {
+  public void defaultSpanNameIsQuery() {
     invokeBoundStatement();
 
     assertThat(spans).extracting(Span::name).containsExactly("bound-statement");
   }
 
   @Test
-  public void reportsSpanOnTransportException() throws Exception {
+  public void reportsSpanOnTransportException() {
     cluster.close();
 
     try {
@@ -171,7 +171,7 @@ public class ITTracingSession {
   }
 
   @Test
-  public void addsErrorTag_onTransportException() throws Exception {
+  public void addsErrorTag_onTransportException() {
     reportsSpanOnTransportException();
 
     assertThat(spans)
@@ -180,7 +180,7 @@ public class ITTracingSession {
   }
 
   @Test
-  public void addsErrorTag_onCanceledFuture() throws Exception {
+  public void addsErrorTag_onCanceledFuture() {
     ResultSetFuture resp = session.executeAsync("SELECT * from system.schema_keyspaces");
     assumeTrue("lost race on cancel", resp.cancel(true));
 
@@ -192,7 +192,7 @@ public class ITTracingSession {
   }
 
   @Test
-  public void reportsServerAddress() throws Exception {
+  public void reportsServerAddress() {
     invokeBoundStatement();
 
     assertThat(spans)
@@ -206,7 +206,7 @@ public class ITTracingSession {
   }
 
   @Test
-  public void customSampler() throws Exception {
+  public void customSampler() {
     cassandraTracing =
         cassandraTracing.toBuilder().sampler(CassandraClientSampler.NEVER_SAMPLE).build();
     session = TracingSession.create(cassandraTracing, ((TracingSession) session).delegate);
@@ -217,7 +217,7 @@ public class ITTracingSession {
   }
 
   @Test
-  public void supportsCustomization() throws Exception {
+  public void supportsCustomization() {
     cassandraTracing =
         cassandraTracing
             .toBuilder()
@@ -259,7 +259,9 @@ public class ITTracingSession {
 
   Tracing.Builder tracingBuilder(Sampler sampler) {
     return brave.Tracing.newBuilder()
-        .currentTraceContext(new StrictCurrentTraceContext())
+        .currentTraceContext(ThreadLocalCurrentTraceContext.newBuilder()
+            .addScopeDecorator(StrictScopeDecorator.create())
+            .build())
         .spanReporter(spans::add)
         .sampler(sampler);
   }

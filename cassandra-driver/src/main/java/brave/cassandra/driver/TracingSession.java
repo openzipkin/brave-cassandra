@@ -37,7 +37,6 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import zipkin2.Endpoint;
 
 import static brave.Span.Kind.CLIENT;
 
@@ -106,7 +105,7 @@ public class TracingSession extends AbstractSession {
       result = delegate.executeAsync(statement);
     } catch (RuntimeException | Error e) {
       if (span.isNoop()) throw e;
-      parser.error(e, span);
+      span.error(e);
       span.finish();
       throw e;
     }
@@ -117,26 +116,23 @@ public class TracingSession extends AbstractSession {
           @Override
           public void onSuccess(ResultSet result) {
             InetSocketAddress host = result.getExecutionInfo().getQueriedHost().getSocketAddress();
-            span.remoteEndpoint(
-                Endpoint.newBuilder()
-                    .serviceName(remoteServiceName)
-                    .ip(host.getAddress())
-                    .port(host.getPort())
-                    .build());
+            span.remoteIpAndPort(host.getHostString(), host.getPort());
+            span.remoteServiceName(remoteServiceName);
             parser.response(result, span);
             span.finish();
           }
 
           @Override
           public void onFailure(Throwable e) {
-            parser.error(e, span);
+            span.error(e);
             span.finish();
           }
         });
     return result;
   }
 
-  void maybeDecorate(Statement statement, Span span) {}
+  void maybeDecorate(Statement statement, Span span) {
+  }
 
   /** Creates a potentially noop span representing this request */
   Span nextSpan(Statement statement) {

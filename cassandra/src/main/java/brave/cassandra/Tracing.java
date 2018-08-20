@@ -25,7 +25,6 @@ import java.util.Map;
 import java.util.UUID;
 import org.apache.cassandra.tracing.TraceState;
 import org.apache.cassandra.utils.FBUtilities;
-import zipkin2.Endpoint;
 import zipkin2.codec.SpanBytesEncoder;
 import zipkin2.reporter.AsyncReporter;
 import zipkin2.reporter.urlconnection.URLConnectionSender;
@@ -118,7 +117,7 @@ public class Tracing extends org.apache.cassandra.tracing.Tracing {
     parseRequest(state, request, parameters, span);
     // observed parameter keys include page_size, consistency_level, serial_consistency_level, query
 
-    span.remoteEndpoint(Endpoint.newBuilder().ip(client).build());
+    span.remoteIpAndPort(client.getHostAddress(), 0);
     span.start();
     return state;
   }

@@ -98,7 +98,7 @@ public class CassandraRule extends ExternalResource {
   }
 
   @Override
-  protected void before() throws Throwable {
+  protected void before() {
     if (server != null) return;
 
     DatabaseDescriptor.daemonInitialization();

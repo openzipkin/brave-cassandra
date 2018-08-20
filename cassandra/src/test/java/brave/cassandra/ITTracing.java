@@ -15,6 +15,8 @@ package brave.cassandra;
 
 import brave.ScopedSpan;
 import brave.cassandra.driver.TracingSession;
+import brave.propagation.StrictScopeDecorator;
+import brave.propagation.ThreadLocalCurrentTraceContext;
 import brave.sampler.Sampler;
 import cassandra.CassandraRule;
 import com.datastax.driver.core.BoundStatement;
@@ -40,8 +42,13 @@ public class ITTracing {
   @ClassRule public static CassandraRule cassandra = new CassandraRule();
 
   ConcurrentLinkedDeque<Span> spans = new ConcurrentLinkedDeque<>();
-  brave.Tracing tracing =
-      brave.Tracing.newBuilder().localServiceName("cassandra").spanReporter(spans::add).build();
+  brave.Tracing tracing = brave.Tracing.newBuilder()
+      .localServiceName("cassandra")
+      .currentTraceContext(ThreadLocalCurrentTraceContext.newBuilder()
+          .addScopeDecorator(StrictScopeDecorator.create())
+          .build())
+      .spanReporter(spans::add)
+      .build();
 
   @After
   public void after() {
@@ -90,7 +97,7 @@ public class ITTracing {
   }
 
   @Test
-  public void usesExistingTraceId() throws Exception {
+  public void usesExistingTraceId() {
     executeTraced(session -> session.prepare("SELECT * from system.schema_keyspaces").bind());
 
     assertThat(spans)
@@ -99,7 +106,7 @@ public class ITTracing {
   }
 
   @Test
-  public void reportsServerKindToZipkin() throws Exception {
+  public void reportsServerKindToZipkin() {
     execute(
         session -> session.prepare("SELECT * from system.schema_keyspaces").enableTracing().bind());
 
@@ -107,7 +114,7 @@ public class ITTracing {
   }
 
   @Test
-  public void defaultSpanNameIsType() throws Exception {
+  public void defaultSpanNameIsType() {
     execute(
         session -> session.prepare("SELECT * from system.schema_keyspaces").enableTracing().bind());
 
@@ -115,7 +122,7 @@ public class ITTracing {
   }
 
   @Test
-  public void defaultRequestTags() throws Exception {
+  public void defaultRequestTags() {
     execute(
         session -> session.prepare("SELECT * from system.schema_keyspaces").enableTracing().bind());
 
@@ -125,7 +132,7 @@ public class ITTracing {
   }
 
   @Test
-  public void reportsClientAddress() throws Exception {
+  public void reportsClientAddress() {
     execute(
         session -> session.prepare("SELECT * from system.schema_keyspaces").enableTracing().bind());
 
