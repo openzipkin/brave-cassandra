@@ -55,14 +55,6 @@ public class CassandraClientParser {
   }
 
   /** Override to parse data from the result set into the span modeling it. */
-  public void response(ResultSet resultSet, SpanCustomizer customizer) {}
-
-  /**
-   * Override to change what data from an error are parsed into the span modeling it. Defaults to
-   * the throwable's message, or the simple name of the throwable's type.
-   */
-  public void error(Throwable throwable, SpanCustomizer customizer) {
-    String message = throwable.getMessage();
-    customizer.tag("error", message != null ? message : throwable.getClass().getSimpleName());
+  public void response(ResultSet resultSet, SpanCustomizer customizer) {
   }
 }
