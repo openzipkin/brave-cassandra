@@ -37,7 +37,7 @@
     <main.signature.artifact>java17</main.signature.artifact>
 
     <main.basedir>${project.basedir}</main.basedir>
-    <brave.version>5.2.0</brave.version>
+    <brave.version>5.3.0</brave.version>
 
     <!-- override to set exclusions per-project -->
     <errorprone.args />

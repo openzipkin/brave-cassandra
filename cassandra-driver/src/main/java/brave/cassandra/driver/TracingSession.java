@@ -16,8 +16,7 @@ package brave.cassandra.driver;
 import brave.Span;
 import brave.Tracer;
 import brave.Tracing;
-import brave.propagation.Propagation.Setter;
-import brave.propagation.TraceContext;
+import brave.propagation.B3SingleFormat;
 import brave.sampler.Sampler;
 import com.datastax.driver.core.AbstractSession;
 import com.datastax.driver.core.CloseFuture;
@@ -41,26 +40,6 @@ import java.util.Map;
 import static brave.Span.Kind.CLIENT;
 
 public class TracingSession extends AbstractSession {
-  static final Setter<Map<String, ByteBuffer>, String> SETTER =
-      new Setter<Map<String, ByteBuffer>, String>() {
-        @Override public void put(Map<String, ByteBuffer> carrier, String key, String value) {
-          if (value == null) { // for example, if injecting a null parent id field
-            carrier.remove(key);
-            return;
-          }
-          int length = value.length(); // all values are ascii
-          byte[] buf = new byte[length];
-          for (int i = 0; i < length; i++) {
-            buf[i] = (byte) value.charAt(i);
-          }
-          carrier.put(key, ByteBuffer.wrap(buf));
-        }
-
-        @Override public String toString() {
-          return "Map::put";
-        }
-      };
-
   public static Session create(Tracing tracing, Session delegate) {
     return new TracingSession(CassandraClientTracing.create(tracing), delegate);
   }
@@ -199,11 +178,9 @@ public class TracingSession extends AbstractSession {
 
   // o.a.c.tracing.Tracing.newSession must use the same propagation format
   static final class PropagatingTracingSession extends TracingSession {
-    final TraceContext.Injector<Map<String, ByteBuffer>> injector;
 
     PropagatingTracingSession(CassandraClientTracing cassandraTracing, Session target) {
       super(cassandraTracing, target);
-      injector = cassandraTracing.tracing().propagation().injector(SETTER);
     }
 
     @Override
@@ -213,7 +190,7 @@ public class TracingSession extends AbstractSession {
       if (statement.getOutgoingPayload() != null) {
         payload.putAll(statement.getOutgoingPayload());
       }
-      injector.inject(span.context(), payload);
+      payload.put("b3", ByteBuffer.wrap(B3SingleFormat.writeB3SingleFormatAsBytes(span.context())));
       statement.setOutgoingPayload(payload);
     }
   }

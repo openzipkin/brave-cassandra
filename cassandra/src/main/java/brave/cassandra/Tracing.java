@@ -17,7 +17,7 @@ import brave.Span;
 import brave.SpanCustomizer;
 import brave.Tracer;
 import brave.internal.Nullable;
-import brave.propagation.SamplingFlags;
+import brave.propagation.B3SingleFormat;
 import brave.propagation.TraceContextOrSamplingFlags;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
@@ -93,10 +93,10 @@ public class Tracing extends org.apache.cassandra.tracing.Tracing {
 
   /** This extracts the RPC span encoded in the custom payload, or starts a new trace */
   Span spanFromPayload(Tracer tracer, @Nullable Map<String, ByteBuffer> payload) {
-    TraceContextOrSamplingFlags extracted =
-        payload == null
-            ? TraceContextOrSamplingFlags.create(SamplingFlags.EMPTY)
-            : component.extractor().extract(payload);
+    ByteBuffer b3 = payload.get("b3");
+    if (b3 == null) return tracer.nextSpan();
+    TraceContextOrSamplingFlags extracted = B3SingleFormat.parseB3SingleFormat(b3.asCharBuffer());
+    if (extracted == null) return tracer.nextSpan();
     return tracer.nextSpan(extracted);
   }
 
