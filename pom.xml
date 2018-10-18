@@ -37,13 +37,14 @@
     <main.signature.artifact>java17</main.signature.artifact>
 
     <main.basedir>${project.basedir}</main.basedir>
-    <brave.version>5.3.3</brave.version>
+    <brave.version>5.4.3</brave.version>
 
     <!-- override to set exclusions per-project -->
     <errorprone.args />
+    <errorprone.version>2.3.2</errorprone.version>
 
     <license-maven-plugin.version>2.11</license-maven-plugin.version>
-    <maven-failsafe-plugin.version>2.22.0</maven-failsafe-plugin.version>
+    <maven-failsafe-plugin.version>2.22.1</maven-failsafe-plugin.version>
   </properties>
 
   <name>Brave Cassandra (Parent)</name>
@@ -134,7 +135,7 @@
       <dependency>
         <groupId>org.assertj</groupId>
         <artifactId>assertj-core</artifactId>
-        <version>3.11.0</version>
+        <version>3.11.1</version>
       </dependency>
     </dependencies>
   </dependencyManagement>
@@ -303,7 +304,7 @@
             <configuration>
               <rules>
                 <requireJavaVersion>
-                  <version>[1.8,11)</version>
+                  <version>[1.8,12)</version>
                 </requireJavaVersion>
               </rules>
             </configuration>
@@ -365,12 +366,12 @@
               <dependency>
                 <groupId>org.codehaus.plexus</groupId>
                 <artifactId>plexus-compiler-javac-errorprone</artifactId>
-                <version>2.8.4</version>
+                <version>2.8.5</version>
               </dependency>
               <dependency>
                 <groupId>com.google.errorprone</groupId>
                 <artifactId>error_prone_core</artifactId>
-                <version>2.3.1</version>
+                <version>${errorprone.version}</version>
               </dependency>
             </dependencies>
           </plugin>
@@ -405,7 +406,7 @@
                     <processorPath>
                       <groupId>com.google.errorprone</groupId>
                       <artifactId>error_prone_core</artifactId>
-                      <version>2.3.1</version>
+                      <version>${errorprone.version}</version>
                     </processorPath>
                   </annotationProcessorPaths>
                 </configuration>
