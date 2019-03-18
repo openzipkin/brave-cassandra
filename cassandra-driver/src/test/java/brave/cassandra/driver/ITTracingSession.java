@@ -19,6 +19,7 @@ package brave.cassandra.driver;
 import brave.SpanCustomizer;
 import brave.Tracer;
 import brave.Tracing;
+import brave.propagation.B3SingleFormat;
 import brave.propagation.StrictScopeDecorator;
 import brave.propagation.ThreadLocalCurrentTraceContext;
 import brave.sampler.Sampler;
@@ -29,8 +30,7 @@ import com.datastax.driver.core.ResultSet;
 import com.datastax.driver.core.ResultSetFuture;
 import com.datastax.driver.core.Session;
 import com.datastax.driver.core.Statement;
-import com.datastax.driver.core.exceptions.NoHostAvailableException;
-import java.nio.ByteBuffer;
+import com.datastax.driver.core.exceptions.DriverInternalError;
 import java.util.Collections;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import org.junit.After;
@@ -40,6 +40,7 @@ import org.junit.Test;
 import zipkin2.Endpoint;
 import zipkin2.Span;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.entry;
 import static org.assertj.core.api.Assertions.failBecauseExceptionWasNotThrown;
@@ -106,8 +107,7 @@ public class ITTracingSession {
 
     session.execute("SELECT * from system.schema_keyspaces");
 
-    assertThat(CustomPayloadCaptor.ref.get().keySet())
-        .containsExactly("X-B3-SpanId", "X-B3-Sampled", "X-B3-TraceId");
+    assertThat(CustomPayloadCaptor.ref.get().keySet()).containsOnly("b3");
   }
 
   @Test
@@ -118,8 +118,7 @@ public class ITTracingSession {
 
     invokeBoundStatement();
 
-    assertThat(CustomPayloadCaptor.ref.get().keySet())
-        .containsExactly("X-B3-SpanId", "X-B3-Sampled", "X-B3-TraceId");
+    assertThat(CustomPayloadCaptor.ref.get().keySet()).containsOnly("b3");
   }
 
   @Test
@@ -141,9 +140,9 @@ public class ITTracingSession {
 
     invokeBoundStatement();
 
-    assertThat(CustomPayloadCaptor.ref.get().get("X-B3-Sampled"))
-        .extracting(ByteBuffer::get)
-        .isEqualTo((byte) '0');
+    assertThat(CustomPayloadCaptor.ref.get().get("b3"))
+        .extracting(b -> B3SingleFormat.parseB3SingleFormat(UTF_8.decode(b)).sampled())
+        .isEqualTo(Boolean.FALSE);
   }
 
   @Test
@@ -166,8 +165,8 @@ public class ITTracingSession {
 
     try {
       invokeBoundStatement();
-      failBecauseExceptionWasNotThrown(NoHostAvailableException.class);
-    } catch (NoHostAvailableException e) {
+      failBecauseExceptionWasNotThrown(DriverInternalError.class);
+    } catch (DriverInternalError e) {
     }
 
     assertThat(spans).hasSize(1);
@@ -179,7 +178,7 @@ public class ITTracingSession {
 
     assertThat(spans)
         .flatExtracting(s -> s.tags().entrySet())
-        .containsOnlyOnce(entry("error", "All host(s) tried for query failed (no host was tried)"));
+        .containsOnlyOnce(entry("error", "Could not send request, session is closed"));
   }
 
   @Test

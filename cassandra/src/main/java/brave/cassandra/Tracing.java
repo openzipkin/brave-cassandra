@@ -33,6 +33,7 @@ import zipkin2.reporter.AsyncReporter;
 import zipkin2.reporter.urlconnection.URLConnectionSender;
 
 import static brave.Span.Kind.SERVER;
+import static java.nio.charset.StandardCharsets.UTF_8;
 
 /**
  * This creates Zipkin server spans for incoming cassandra requests. Spans are created when there's
@@ -96,9 +97,9 @@ public class Tracing extends org.apache.cassandra.tracing.Tracing {
 
   /** This extracts the RPC span encoded in the custom payload, or starts a new trace */
   Span spanFromPayload(Tracer tracer, @Nullable Map<String, ByteBuffer> payload) {
-    ByteBuffer b3 = payload.get("b3");
+    ByteBuffer b3 = payload != null ? payload.get("b3") : null;
     if (b3 == null) return tracer.nextSpan();
-    TraceContextOrSamplingFlags extracted = B3SingleFormat.parseB3SingleFormat(b3.asCharBuffer());
+    TraceContextOrSamplingFlags extracted = B3SingleFormat.parseB3SingleFormat(UTF_8.decode(b3));
     if (extracted == null) return tracer.nextSpan();
     return tracer.nextSpan(extracted);
   }
