@@ -1,23 +1,32 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
 
-    Copyright 2017-2018 The OpenZipkin Authors
+    Licensed to the Apache Software Foundation (ASF) under one or more
+    contributor license agreements.  See the NOTICE file distributed with
+    this work for additional information regarding copyright ownership.
+    The ASF licenses this file to You under the Apache License, Version 2.0
+    (the "License"); you may not use this file except in compliance with
+    the License.  You may obtain a copy of the License at
 
-    Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
-    in compliance with the License. You may obtain a copy of the License at
+        http://www.apache.org/licenses/LICENSE-2.0
 
-    http://www.apache.org/licenses/LICENSE-2.0
-
-    Unless required by applicable law or agreed to in writing, software distributed under the License
-    is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
-    or implied. See the License for the specific language governing permissions and limitations under
-    the License.
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
 
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <groupId>io.zipkin.brave.cassandra</groupId>
+  <parent>
+    <groupId>org.apache</groupId>
+    <artifactId>apache</artifactId>
+    <version>21</version>
+  </parent>
+
+  <groupId>org.apache.zipkin.brave.cassandra</groupId>
   <artifactId>brave-cassandra-parent</artifactId>
   <version>0.10.2-SNAPSHOT</version>
   <packaging>pom</packaging>
@@ -37,24 +46,24 @@
     <main.signature.artifact>java17</main.signature.artifact>
 
     <main.basedir>${project.basedir}</main.basedir>
-    <brave.version>5.4.3</brave.version>
+    <brave.version>5.6.3</brave.version>
 
     <!-- override to set exclusions per-project -->
     <errorprone.args />
     <errorprone.version>2.3.2</errorprone.version>
 
-    <license-maven-plugin.version>2.11</license-maven-plugin.version>
-    <maven-failsafe-plugin.version>2.22.1</maven-failsafe-plugin.version>
+    <license-maven-plugin.version>3.0</license-maven-plugin.version>
+    <maven-failsafe-plugin.version>3.0.0-M3</maven-failsafe-plugin.version>
   </properties>
 
   <name>Brave Cassandra (Parent)</name>
-  <description>Brave Cassandra (Parent)</description>
-  <url>https://github.com/openzipkin/brave-cassandra</url>
+  <description>Apache Zipkin Brave (incubating) for Apache Cassandra (Parent)</description>
+  <url>https://github.com/apache/incubator-zipkin-brave-cassandra</url>
   <inceptionYear>2017</inceptionYear>
 
   <organization>
-    <name>OpenZipkin</name>
-    <url>http://zipkin.io/</url>
+    <name>The Apache Software Foundation</name>
+    <url>http://www.apache.org/</url>
   </organization>
 
   <licenses>
@@ -66,10 +75,9 @@
   </licenses>
 
   <scm>
-    <url>https://github.com/openzipkin/brave-cassandra</url>
-    <connection>scm:git:https://github.com/openzipkin/brave-cassandra.git</connection>
-    <developerConnection>scm:git:https://github.com/openzipkin/brave-cassandra.git
-    </developerConnection>
+    <url>https://github.com/apache/incubator-zipkin-brave-cassandra</url>
+    <connection>scm:git:https://github.com/apache/incubator-zipkin-brave-cassandra.git</connection>
+    <developerConnection>scm:git:https://github.com/apache/incubator-zipkin-brave-cassandra.git</developerConnection>
     <tag>HEAD</tag>
   </scm>
 
@@ -82,20 +90,35 @@
     </developer>
   </developers>
 
+  <mailingLists>
+    <mailingList>
+      <name>Zipkin Developer List</name>
+      <post>dev@zipkin.apache.org</post>
+      <subscribe>dev-subscribe@zipkin.apache.org</subscribe>
+      <unsubscribe>dev-unsubscribe@zipkin.apache.org</unsubscribe>
+    </mailingList>
+    <mailingList>
+      <name>Zipkin Commits</name>
+      <post>commits@zipkin.apache.org</post>
+      <subscribe>commits-subscribe@zipkin.apache.org</subscribe>
+      <unsubscribe>commits-unsubscribe@zipkin.apache.org</unsubscribe>
+    </mailingList>
+  </mailingLists>
+
   <distributionManagement>
     <repository>
-      <id>bintray</id>
-      <url>https://api.bintray.com/maven/openzipkin/maven/brave-cassandra/;publish=1</url>
+      <id>apache.releases.https</id>
+      <url>https://repository.apache.org/service/local/staging/deploy/maven2</url>
     </repository>
     <snapshotRepository>
-      <id>jfrog-snapshots</id>
-      <url>http://oss.jfrog.org/artifactory/oss-snapshot-local</url>
+      <id>apache.snapshots.https</id>
+      <url>https://repository.apache.org/content/repositories/snapshots/</url>
     </snapshotRepository>
   </distributionManagement>
 
   <issueManagement>
     <system>Github</system>
-    <url>https://github.com/openzipkin/brave-cassandra/issues</url>
+    <url>https://github.com/apache/incubator-zipkin-brave-cassandra/issues</url>
   </issueManagement>
 
   <dependencyManagement>
@@ -110,7 +133,7 @@
       <dependency>
         <groupId>org.apache.cassandra</groupId>
         <artifactId>cassandra-all</artifactId>
-        <version>3.11.3</version>
+        <version>3.11.4</version>
         <exclusions>
           <exclusion>
             <groupId>org.slf4j</groupId>
@@ -125,7 +148,7 @@
       <dependency>
         <groupId>com.datastax.cassandra</groupId>
         <artifactId>cassandra-driver-core</artifactId>
-        <version>3.6.0</version>
+        <version>3.7.1</version>
       </dependency>
       <dependency>
         <groupId>junit</groupId>
@@ -135,7 +158,7 @@
       <dependency>
         <groupId>org.assertj</groupId>
         <artifactId>assertj-core</artifactId>
-        <version>3.11.1</version>
+        <version>3.12.1</version>
       </dependency>
     </dependencies>
   </dependencyManagement>
@@ -162,11 +185,24 @@
   <build>
     <pluginManagement>
       <plugins>
-        <!-- mvn -N io.takari:maven:wrapper -Dmaven=3.5.4 -->
+        <!-- mvn -N io.takari:maven:wrapper generates the ./mvnw script -->
         <plugin>
           <groupId>io.takari</groupId>
           <artifactId>maven</artifactId>
-          <version>0.6.1</version>
+          <version>0.7.4</version>
+          <configuration>
+            <maven>3.6.0</maven>
+          </configuration>
+        </plugin>
+
+        <plugin>
+          <artifactId>maven-javadoc-plugin</artifactId>
+          <!-- inherit version from org.apache:parent -->
+          <configuration>
+            <failOnError>false</failOnError>
+            <!-- hush pedantic warnings: we don't put param and return on everything! -->
+            <doclint>none</doclint>
+          </configuration>
         </plugin>
       </plugins>
     </pluginManagement>
@@ -188,7 +224,7 @@
       <plugin>
         <groupId>net.orfjackal.retrolambda</groupId>
         <artifactId>retrolambda-maven-plugin</artifactId>
-        <version>2.5.5</version>
+        <version>2.5.6</version>
         <executions>
           <execution>
             <goals>
@@ -205,7 +241,7 @@
 
       <plugin>
         <artifactId>maven-jar-plugin</artifactId>
-        <version>3.1.0</version>
+        <version>3.1.1</version>
       </plugin>
 
       <plugin>
@@ -237,18 +273,15 @@
         </executions>
       </plugin>
 
-      <!-- Ensures checksums are added to published jars -->
       <plugin>
         <artifactId>maven-install-plugin</artifactId>
-        <version>2.5.2</version>
-        <configuration>
-          <createChecksum>true</createChecksum>
-        </configuration>
+        <version>3.0.0-M1</version>
       </plugin>
 
+      <!-- Uploads occur as a last step (which also adds checksums) -->
       <plugin>
         <artifactId>maven-deploy-plugin</artifactId>
-        <version>2.8.2</version>
+        <version>3.0.0-M1</version>
       </plugin>
 
       <plugin>
@@ -269,19 +302,13 @@
             <exclude>etc/header.txt</exclude>
             <exclude>**/.idea/**</exclude>
             <exclude>LICENSE</exclude>
+            <exclude>DISCLAIMER</exclude>
+            <exclude>NOTICE</exclude>
+            <exclude>Jenkinsfile</exclude>
             <exclude>**/*.md</exclude>
-            <exclude>src/test/resources/**</exclude>
-            <exclude>src/main/resources/**</exclude>
           </excludes>
           <strictCheck>true</strictCheck>
         </configuration>
-        <dependencies>
-          <dependency>
-            <groupId>com.mycila</groupId>
-            <artifactId>license-maven-plugin-git</artifactId>
-            <version>${license-maven-plugin.version}</version>
-          </dependency>
-        </dependencies>
         <executions>
           <execution>
             <goals>
@@ -313,22 +340,62 @@
       </plugin>
 
       <plugin>
-        <artifactId>maven-release-plugin</artifactId>
-        <version>2.5.3</version>
+        <groupId>org.apache.rat</groupId>
+        <artifactId>apache-rat-plugin</artifactId>
+        <version>0.13</version>
         <configuration>
-          <useReleaseProfile>false</useReleaseProfile>
-          <releaseProfiles>release</releaseProfiles>
-          <autoVersionSubmodules>true</autoVersionSubmodules>
-          <tagNameFormat>@{project.version}</tagNameFormat>
+          <excludes>
+            <exclude>**/target/**</exclude>
+
+            <!-- IDE files -->
+            <exclude>**/*.iml</exclude>
+            <exclude>**/.idea/**</exclude>
+            <exclude>**/*.classpath</exclude>
+            <exclude>**/.project</exclude>
+            <exclude>**/.settings/**</exclude>
+            <exclude>**/dependency-reduced-pom.xml</exclude>
+
+            <!-- git files -->
+            <exclude>**/.gitignore</exclude>
+            <exclude>**/.gitmodules</exclude>
+            <exclude>**/.git/**</exclude>
+
+            <!-- CI files -->
+            <exclude>**/.travis.yml</exclude>
+
+            <!-- GitHub files -->
+            <exclude>**/.github/**</exclude>
+
+            <!-- document files -->
+            <exclude>**/*.md</exclude>
+
+            <!-- Maven Wrapper generated files -->
+            <exclude>.mvn/wrapper/maven-wrapper.properties</exclude>
+          </excludes>
         </configuration>
+        <executions>
+          <execution>
+            <phase>verify</phase>
+            <goals>
+              <goal>check</goal>
+            </goals>
+          </execution>
+        </executions>
       </plugin>
 
+      <!-- org.apache:apache:21 sets maven-remote-resources-plugin in plugins, not pluginManagement
+           This results in execution in the parent project, and a side effect of an empty
+           DEPENDENCIES file in the assembly when packaged with the apache-release profile.
+
+           https://issues.apache.org/jira/browse/MPOM-218
+
+           This works around the problem by skipping at the parent level at the cost of having to
+           un-skip it at every deployed child.
+       -->
       <plugin>
-        <groupId>io.zipkin.centralsync-maven-plugin</groupId>
-        <artifactId>centralsync-maven-plugin</artifactId>
-        <version>0.1.0</version>
+        <artifactId>maven-remote-resources-plugin</artifactId>
         <configuration>
-          <packageName>brave-cassandra</packageName>
+          <skip>true</skip>
         </configuration>
       </plugin>
     </plugins>
@@ -417,38 +484,23 @@
       </build>
     </profile>
     <profile>
-      <id>release</id>
+      <id>apache-release</id>
       <build>
         <plugins>
-          <!-- Creates source jar -->
           <plugin>
-            <artifactId>maven-source-plugin</artifactId>
-            <version>3.0.1</version>
+            <artifactId>maven-assembly-plugin</artifactId>
             <executions>
               <execution>
-                <id>attach-sources</id>
-                <goals>
-                  <goal>jar</goal>
-                </goals>
-              </execution>
-            </executions>
-          </plugin>
-
-          <plugin>
-            <artifactId>maven-javadoc-plugin</artifactId>
-            <version>3.0.1</version>
-            <configuration>
-              <failOnError>false</failOnError>
-              <!-- hush pedantic warnings: we don't put param and return on everything! -->
-              <doclint>none</doclint>
-            </configuration>
-            <executions>
-              <execution>
-                <id>attach-javadocs</id>
-                <goals>
-                  <goal>jar</goal>
-                </goals>
-                <phase>package</phase>
+                <id>source-release-assembly</id>
+                <configuration>
+                  <!-- make the source release zip includes the word incubating -->
+                  <finalName>apache-zipkin-brave-cassandra-incubating-${project.version}</finalName>
+                  <descriptors>
+                    <descriptor>src/main/assemblies/source-release.xml</descriptor>
+                  </descriptors>
+                  <!-- don't inherit the source-release as we are overriding it -->
+                  <descriptorRefs combine.self="override" />
+                </configuration>
               </execution>
             </executions>
           </plugin>
