@@ -19,6 +19,6 @@ Artifacts are under the maven group id `org.apache.zipkin.brave.cassandra`
 ### Source Releases
 Source Releases are uploaded to [Apache](https://dist.apache.org/repos/dist/release/incubator/zipkin/brave-cassandra)
 ### Binary Releases
-Releases are uploaded to [Apache](https://repository.apache.org/service/local/staging/deploy/maven2) and synchronized to [Maven Central](http://search.maven.org/#search%7Cga%7C1%7Cg%3A%22org.apache.zipkin.brave.cassandra%22)
+Binary Releases are uploaded to [Apache](https://repository.apache.org/service/local/staging/deploy/maven2) and synchronized to [Maven Central](http://search.maven.org/#search%7Cga%7C1%7Cg%3A%22org.apache.zipkin.brave.cassandra%22)
 ### Binary Snapshots
-Snapshots are uploaded to [Apache](https://repository.apache.org/content/repositories/snapshots/) after commits to master.
+Binary Snapshots are uploaded to [Apache](https://repository.apache.org/content/repositories/snapshots/) after commits to master.
