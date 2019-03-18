@@ -48,6 +48,8 @@
     <main.basedir>${project.basedir}</main.basedir>
     <brave.version>5.6.3</brave.version>
 
+    <log4j.version>2.11.2</log4j.version>
+
     <!-- override to set exclusions per-project -->
     <errorprone.args />
     <errorprone.version>2.3.3</errorprone.version>
@@ -145,6 +147,12 @@
           </exclusion>
         </exclusions>
       </dependency>
+      <!-- Override until Cassandra 4.0 per CASSANDRA-9608 -->
+      <dependency>
+        <groupId>com.github.jbellis</groupId>
+        <artifactId>jamm</artifactId>
+        <version>0.3.3</version>
+      </dependency>
       <dependency>
         <groupId>com.datastax.cassandra</groupId>
         <artifactId>cassandra-driver-core</artifactId>
@@ -159,6 +167,22 @@
         <groupId>org.assertj</groupId>
         <artifactId>assertj-core</artifactId>
         <version>3.12.1</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.logging.log4j</groupId>
+        <artifactId>log4j-core</artifactId>
+        <version>${log4j.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.logging.log4j</groupId>
+        <artifactId>log4j-slf4j-impl</artifactId>
+        <version>${log4j.version}</version>
+        <exclusions>
+          <exclusion>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+          </exclusion>
+        </exclusions>
       </dependency>
     </dependencies>
   </dependencyManagement>
@@ -179,8 +203,12 @@
       <artifactId>assertj-core</artifactId>
       <scope>test</scope>
     </dependency>
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-slf4j-impl</artifactId>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
-
 
   <build>
     <pluginManagement>
@@ -251,6 +279,20 @@
       <plugin>
         <artifactId>maven-failsafe-plugin</artifactId>
         <version>${maven-failsafe-plugin.version}</version>
+        <executions>
+          <execution>
+            <id>integration-test</id>
+            <goals>
+              <goal>integration-test</goal>
+            </goals>
+          </execution>
+          <execution>
+            <id>verify</id>
+            <goals>
+              <goal>verify</goal>
+            </goals>
+          </execution>
+        </executions>
       </plugin>
 
       <plugin>
