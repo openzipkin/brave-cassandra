@@ -52,10 +52,7 @@ preparedStatement.enableTracing();
 
 // By default, B3 style is used, so instrumented clients do something like this
 Map<String, ByteBuffer> payload = new LinkedHashMap<>();
-payload.set("X-B3-TraceId", byteBuffer("463ac35c9f6413ad"));
-payload.set("X-B3-ParentSpanId", byteBuffer("463ac35c9f6413ad"));
-payload.set("X-B3-SpanId", byteBuffer("72485a3953bb6124"));
-payload.set("X-B3-Sampled", byteBuffer("1"));
+payload.set("b3", byteBuffer("463ac35c9f6413ad-72485a3953bb6124-1-463ac35c9f6413ad"));
 preparedStatement.setOutgoingPayload(payload);
 ```
 
