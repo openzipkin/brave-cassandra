@@ -3,8 +3,10 @@
 [![Maven Central](https://img.shields.io/maven-central/v/io.zipkin.brave.cassandra/brave-instrumentation-cassandra.svg)](https://search.maven.org/search?q=g:io.brave.cassandra%20AND%20a:brave-instrumentation-cassandra)
 
 # brave-cassandra
-This contains tracing instrumentation for [Cassandra](https://github.com/apache/cassandra/blob/trunk/src/java/org/apache/cassandra/tracing/Tracing.java) and the [DataStax Java Driver](https://github.com/datastax/java-driver).
-    
+Brave for Apache Cassandra allows you to trace activities started from the Datastax Java Driver all the way into Cassandra.
+
+This repository includes tracing wrappers for [DataStax Java Driver](https://github.com/datastax/java-driver) and an [Apache Cassandra tracing implementation](https://github.com/apache/cassandra/blob/trunk/src/java/org/apache/cassandra/tracing/Tracing.java)
+
 `brave.cassandra.Tracing` extracts trace state from the custom payload
 of incoming requests. How long each request takes, each suboperation,
 and relevant tags like the session ID are reported to Zipkin.
