@@ -37,9 +37,9 @@
     <main.signature.artifact>java17</main.signature.artifact>
 
     <main.basedir>${project.basedir}</main.basedir>
-    <brave.version>5.6.5</brave.version>
+    <brave.version>5.8.0</brave.version>
 
-    <log4j.version>2.11.2</log4j.version>
+    <log4j.version>2.12.1</log4j.version>
 
     <!-- override to set exclusions per-project -->
     <errorprone.args />
@@ -133,7 +133,7 @@
       <dependency>
         <groupId>com.datastax.cassandra</groupId>
         <artifactId>cassandra-driver-core</artifactId>
-        <version>3.7.1</version>
+        <version>3.7.2</version>
       </dependency>
       <dependency>
         <groupId>junit</groupId>
@@ -143,7 +143,7 @@
       <dependency>
         <groupId>org.assertj</groupId>
         <artifactId>assertj-core</artifactId>
-        <version>3.12.1</version>
+        <version>3.13.2</version>
       </dependency>
       <dependency>
         <groupId>org.apache.logging.log4j</groupId>
@@ -196,7 +196,7 @@
           <artifactId>maven</artifactId>
           <version>0.7.6</version>
           <configuration>
-            <maven>3.6.1</maven>
+            <maven>3.6.2</maven>
           </configuration>
         </plugin>
 
@@ -296,7 +296,7 @@
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>animal-sniffer-maven-plugin</artifactId>
-        <version>1.17</version>
+        <version>1.18</version>
         <configuration>
           <signature>
             <groupId>org.codehaus.mojo.signature</groupId>
@@ -433,7 +433,7 @@
 
           <plugin>
             <artifactId>maven-javadoc-plugin</artifactId>
-            <version>3.1.0</version>
+            <version>3.1.1</version>
             <configuration>
               <failOnError>false</failOnError>
               <!-- hush pedantic warnings: we don't put param and return on everything! -->
