@@ -37,7 +37,7 @@
     <main.signature.artifact>java17</main.signature.artifact>
 
     <main.basedir>${project.basedir}</main.basedir>
-    <brave.version>5.8.0</brave.version>
+    <brave.version>5.9.0</brave.version>
 
     <log4j.version>2.12.1</log4j.version>
 
@@ -133,7 +133,7 @@
       <dependency>
         <groupId>com.datastax.cassandra</groupId>
         <artifactId>cassandra-driver-core</artifactId>
-        <version>3.7.2</version>
+        <version>3.8.0</version>
       </dependency>
       <dependency>
         <groupId>junit</groupId>

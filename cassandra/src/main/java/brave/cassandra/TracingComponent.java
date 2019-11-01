@@ -20,8 +20,7 @@ abstract class TracingComponent {
   abstract Tracer tracer();
 
   static final class Current extends TracingComponent {
-    @Override
-    Tracer tracer() {
+    @Override Tracer tracer() {
       return brave.Tracing.currentTracer();
     }
   }
@@ -34,8 +33,7 @@ abstract class TracingComponent {
       this.tracer = tracing.tracer();
     }
 
-    @Override
-    Tracer tracer() {
+    @Override Tracer tracer() {
       return tracer;
     }
   }

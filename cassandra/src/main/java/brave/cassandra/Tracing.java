@@ -75,8 +75,7 @@ public class Tracing extends org.apache.cassandra.tracing.Tracing {
    * payload. If that's possible, it re-uses the trace identifiers and starts a server span.
    * Otherwise, a new trace is created.
    */
-  @Override
-  protected final UUID newSession(
+  @Override protected final UUID newSession(
       UUID sessionId, TraceType traceType, Map<String, ByteBuffer> customPayload) {
     Tracer tracer = component.tracer();
     if (tracer == null || traceType == TraceType.NONE) {
