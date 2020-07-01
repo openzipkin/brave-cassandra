@@ -39,7 +39,7 @@
     <main.basedir>${project.basedir}</main.basedir>
     <brave.version>5.9.0</brave.version>
 
-    <log4j.version>2.12.1</log4j.version>
+    <log4j.version>2.13.3</log4j.version>
 
     <!-- override to set exclusions per-project -->
     <errorprone.args />
