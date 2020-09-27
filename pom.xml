@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
 
-    Copyright 2017-2019 The OpenZipkin Authors
+    Copyright 2017-2020 The OpenZipkin Authors
 
     Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
     in compliance with the License. You may obtain a copy of the License at
@@ -37,13 +37,13 @@
     <main.signature.artifact>java17</main.signature.artifact>
 
     <main.basedir>${project.basedir}</main.basedir>
-    <brave.version>5.9.0</brave.version>
+    <brave.version>5.12.6</brave.version>
 
-    <log4j.version>2.12.1</log4j.version>
+    <log4j.version>2.13.3</log4j.version>
 
     <!-- override to set exclusions per-project -->
     <errorprone.args />
-    <errorprone.version>2.3.3</errorprone.version>
+    <errorprone.version>2.4.0</errorprone.version>
 
     <license-maven-plugin.version>3.0</license-maven-plugin.version>
     <maven-failsafe-plugin.version>3.0.0-M3</maven-failsafe-plugin.version>
@@ -138,12 +138,12 @@
       <dependency>
         <groupId>junit</groupId>
         <artifactId>junit</artifactId>
-        <version>4.12</version>
+        <version>4.13</version>
       </dependency>
       <dependency>
         <groupId>org.assertj</groupId>
         <artifactId>assertj-core</artifactId>
-        <version>3.13.2</version>
+        <version>3.17.2</version>
       </dependency>
       <dependency>
         <groupId>org.apache.logging.log4j</groupId>
