@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2019 The OpenZipkin Authors
+ * Copyright 2017-2020 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -25,8 +25,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.apache.cassandra.tracing.TraceState;
 import org.apache.cassandra.utils.FBUtilities;
-import zipkin2.codec.SpanBytesEncoder;
-import zipkin2.reporter.AsyncReporter;
+import zipkin2.reporter.brave.AsyncZipkinSpanHandler;
 import zipkin2.reporter.urlconnection.URLConnectionSender;
 
 import static brave.Span.Kind.SERVER;
@@ -37,7 +36,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
  * a tracing component available, and the incoming payload is not explicitly unsampled.
  *
  * <h3>Configuring a tracing component</h3>
- *
+ * <p>
  * If the system property "zipkin.http_endpoint" is set, a basic tracing component is setup.
  *
  * <p>Otherwise, {@link brave.Tracing#current()} is used. This relies on external bootstrapping of
@@ -59,14 +58,12 @@ public class Tracing extends org.apache.cassandra.tracing.Tracing {
       component = new TracingComponent.Current();
       return;
     }
-    AsyncReporter<zipkin2.Span> spanReporter =
-        AsyncReporter.builder(URLConnectionSender.create(endpoint))
-            .build(endpoint.contains("v2") ? SpanBytesEncoder.JSON_V2 : SpanBytesEncoder.JSON_V1);
-    brave.Tracing tracing =
-        brave.Tracing.newBuilder()
-            .localServiceName(System.getProperty("zipkin.service_name", "cassandra"))
-            .spanReporter(spanReporter)
-            .build();
+    AsyncZipkinSpanHandler zipkinSpanHandler =
+        AsyncZipkinSpanHandler.newBuilder(URLConnectionSender.create(endpoint)).build();
+    brave.Tracing tracing = brave.Tracing.newBuilder()
+        .localServiceName(System.getProperty("zipkin.service_name", "cassandra"))
+        .addSpanHandler(zipkinSpanHandler)
+        .build();
     component = new TracingComponent.Explicit(tracing);
   }
 
@@ -100,14 +97,12 @@ public class Tracing extends org.apache.cassandra.tracing.Tracing {
     return tracer.nextSpan(extracted);
   }
 
-  @Override
-  protected final void stopSessionImpl() {
+  @Override protected final void stopSessionImpl() {
     ZipkinTraceState state = (ZipkinTraceState) get();
     if (state != null) state.incoming.finish();
   }
 
-  @Override
-  public final TraceState begin(
+  @Override public final TraceState begin(
       String request, InetAddress client, Map<String, String> parameters) {
     ZipkinTraceState state = ((ZipkinTraceState) get());
     Span span = state.incoming;
@@ -129,11 +124,11 @@ public class Tracing extends org.apache.cassandra.tracing.Tracing {
 
   /**
    * Override to change what data from the statement are parsed into the span representing it. By
-   * default, this sets the span name to trace type and tags {@link
-   * CassandraTraceKeys#CASSANDRA_REQUEST} and the {@link CassandraTraceKeys#CASSANDRA_SESSION_ID}.
+   * default, this sets the span name to trace type and tags {@link CassandraTraceKeys#CASSANDRA_REQUEST}
+   * and the {@link CassandraTraceKeys#CASSANDRA_SESSION_ID}.
    *
-   * <p>If you only want to change the span name, you can override {@link #parseSpanName(TraceState,
-   * String)} instead.
+   * <p>If you only want to change the span name, you can override {@link
+   * #parseSpanName(TraceState, String)} instead.
    *
    * @see #parseSpanName(TraceState, String)
    */
@@ -144,14 +139,12 @@ public class Tracing extends org.apache.cassandra.tracing.Tracing {
     customizer.tag(CassandraTraceKeys.CASSANDRA_SESSION_ID, state.sessionId.toString());
   }
 
-  @Override
-  protected final TraceState newTraceState(
+  @Override protected final TraceState newTraceState(
       InetAddress coordinator, UUID sessionId, TraceType traceType) {
     throw new AssertionError();
   }
 
-  @Override
-  public final void trace(ByteBuffer sessionId, String message, int ttl) {
+  @Override public final void trace(ByteBuffer sessionId, String message, int ttl) {
     // not current tracing outbound messages
   }
 
@@ -163,8 +156,7 @@ public class Tracing extends org.apache.cassandra.tracing.Tracing {
       this.incoming = incoming;
     }
 
-    @Override
-    protected void traceImpl(String message) {
+    @Override protected void traceImpl(String message) {
       incoming.annotate(message); // skip creating local spans for now
     }
   }

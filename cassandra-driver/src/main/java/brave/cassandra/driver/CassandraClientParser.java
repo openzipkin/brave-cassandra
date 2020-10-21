@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2019 The OpenZipkin Authors
+ * Copyright 2017-2020 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -18,6 +18,9 @@ import com.datastax.driver.core.BoundStatement;
 import com.datastax.driver.core.ResultSet;
 import com.datastax.driver.core.Statement;
 import com.google.common.base.CaseFormat;
+
+import static brave.cassandra.driver.CassandraTraceKeys.CASSANDRA_KEYSPACE;
+import static brave.cassandra.driver.CassandraTraceKeys.CASSANDRA_QUERY;
 
 /**
  * Provides reasonable defaults for the data contained in cassandra client spans. Subclass to
@@ -39,13 +42,10 @@ public class CassandraClientParser {
   public void request(Statement statement, SpanCustomizer customizer) {
     customizer.name(spanName(statement));
     String keyspace = statement.getKeyspace();
-    if (keyspace != null) {
-      customizer.tag(CassandraTraceKeys.CASSANDRA_KEYSPACE, statement.getKeyspace());
-    }
+    if (keyspace != null) customizer.tag(CASSANDRA_KEYSPACE, statement.getKeyspace());
     if (statement instanceof BoundStatement) {
-      customizer.tag(
-          CassandraTraceKeys.CASSANDRA_QUERY,
-          ((BoundStatement) statement).preparedStatement().getQueryString());
+      BoundStatement bound = ((BoundStatement) statement);
+      customizer.tag(CASSANDRA_QUERY, bound.preparedStatement().getQueryString());
     }
   }
 

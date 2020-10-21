@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2019 The OpenZipkin Authors
+ * Copyright 2017-2020 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -15,6 +15,7 @@ package brave.cassandra.driver;
 
 import brave.Tracing;
 import brave.internal.Nullable;
+import brave.propagation.Propagation;
 
 public final class CassandraClientTracing {
   public static CassandraClientTracing create(Tracing tracing) {
@@ -114,7 +115,7 @@ public final class CassandraClientTracing {
    * production = TracingSession.create(httpTracing.remoteServiceName("production"));
    * }</pre>
    *
-   * @see brave.Span#remoteEndpoint(zipkin2.Endpoint)
+   * @see brave.Span#remoteServiceName(String)
    */
   @Nullable public String remoteServiceName() {
     return remoteServiceName;
@@ -131,7 +132,7 @@ public final class CassandraClientTracing {
 
   /**
    * When true, trace contexts will be propagated downstream based on the {@link
-   * Tracing#propagationFactory() configured implementation}.
+   * Tracing.Builder#propagationFactory(Propagation.Factory) configured implementation}.
    *
    * <p>Warning: sometimes this can cause connection failures. As such, consider this feature
    * experimental.

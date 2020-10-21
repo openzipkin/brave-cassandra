@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2019 The OpenZipkin Authors
+ * Copyright 2017-2020 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -17,7 +17,7 @@ import brave.Span;
 import brave.Tracer;
 import brave.Tracing;
 import brave.propagation.B3SingleFormat;
-import brave.sampler.Sampler;
+import brave.propagation.CurrentTraceContext;
 import com.datastax.driver.core.AbstractSession;
 import com.datastax.driver.core.CloseFuture;
 import com.datastax.driver.core.Cluster;
@@ -54,6 +54,7 @@ public class TracingSession extends AbstractSession {
   }
 
   final Tracer tracer;
+  final CurrentTraceContext currentTraceContext;
   final CassandraClientSampler sampler;
   final CassandraClientParser parser;
   final String remoteServiceName;
@@ -64,6 +65,7 @@ public class TracingSession extends AbstractSession {
     if (target == null) throw new NullPointerException("target == null");
     this.delegate = target;
     tracer = cassandraTracing.tracing().tracer();
+    currentTraceContext = cassandraTracing.tracing().currentTraceContext();
     sampler = cassandraTracing.sampler();
     parser = cassandraTracing.parser();
     String remoteServiceName = cassandraTracing.remoteServiceName();
@@ -71,9 +73,8 @@ public class TracingSession extends AbstractSession {
         remoteServiceName != null ? remoteServiceName : target.getCluster().getClusterName();
   }
 
-  @Override
-  public ResultSetFuture executeAsync(Statement statement) {
-    Span span = nextSpan(statement);
+  @Override public ResultSetFuture executeAsync(Statement statement) {
+    Span span = tracer.nextSpan(sampler, statement);
     if (!span.isNoop()) parser.request(statement, span.kind(CLIENT));
 
     maybeDecorate(statement, span);
@@ -89,102 +90,76 @@ public class TracingSession extends AbstractSession {
       throw e;
     }
     if (span.isNoop()) return result; // don't add callback on noop
-    Futures.addCallback(
-        result,
-        new FutureCallback<ResultSet>() {
-          @Override
-          public void onSuccess(ResultSet result) {
-            InetSocketAddress host = result.getExecutionInfo().getQueriedHost().getSocketAddress();
-            span.remoteIpAndPort(host.getHostString(), host.getPort());
-            span.remoteServiceName(remoteServiceName);
-            parser.response(result, span);
-            span.finish();
-          }
+    Futures.addCallback(result, new FutureCallback<ResultSet>() {
+      @Override public void onSuccess(ResultSet result) {
+        InetSocketAddress host = result.getExecutionInfo().getQueriedHost().getSocketAddress();
+        span.remoteIpAndPort(host.getHostString(), host.getPort());
+        span.remoteServiceName(remoteServiceName);
+        parser.response(result, span);
+        span.finish();
+      }
 
-          @Override
-          public void onFailure(Throwable e) {
-            span.error(e);
-            span.finish();
-          }
-        });
+      @Override public void onFailure(Throwable e) {
+        span.error(e);
+        span.finish();
+      }
+    });
     return result;
   }
 
   void maybeDecorate(Statement statement, Span span) {
   }
 
-  /** Creates a potentially noop span representing this request */
-  Span nextSpan(Statement statement) {
-    if (tracer.currentSpan() != null) return tracer.nextSpan();
-
-    // If there was no parent, we are making a new trace. Try to sample the request.
-    Boolean sampled = sampler.trySample(statement);
-    if (sampled == null) return tracer.newTrace(); // defer sampling decision to trace ID
-    return tracer.withSampler(sampled ? Sampler.ALWAYS_SAMPLE : Sampler.NEVER_SAMPLE).nextSpan();
-  }
-
-  @Override
-  protected ListenableFuture<PreparedStatement> prepareAsync(
+  @Override protected ListenableFuture<PreparedStatement> prepareAsync(
       String query, Map<String, ByteBuffer> customPayload) {
     SimpleStatement statement = new SimpleStatement(query);
     statement.setOutgoingPayload(customPayload);
     return prepareAsync(statement);
   }
 
-  @Override
-  public ListenableFuture<PreparedStatement> prepareAsync(String query) {
+  @Override public ListenableFuture<PreparedStatement> prepareAsync(String query) {
     return delegate.prepareAsync(query);
   }
 
-  @Override
-  public String getLoggedKeyspace() {
+  @Override public String getLoggedKeyspace() {
     return delegate.getLoggedKeyspace();
   }
 
-  @Override
-  public Session init() {
+  @Override public Session init() {
     return delegate.init();
   }
 
-  @Override
-  public ListenableFuture<Session> initAsync() {
+  @Override public ListenableFuture<Session> initAsync() {
     return delegate.initAsync();
   }
 
-  @Override
-  public ListenableFuture<PreparedStatement> prepareAsync(RegularStatement statement) {
+  @Override public ListenableFuture<PreparedStatement> prepareAsync(RegularStatement statement) {
     return delegate.prepareAsync(statement);
   }
 
-  @Override
-  public CloseFuture closeAsync() {
+  @Override public CloseFuture closeAsync() {
     return delegate.closeAsync();
   }
 
-  @Override
-  public boolean isClosed() {
+  @Override public boolean isClosed() {
     return delegate.isClosed();
   }
 
-  @Override
-  public Cluster getCluster() {
+  @Override public Cluster getCluster() {
     return delegate.getCluster();
   }
 
-  @Override
-  public State getState() {
+  @Override public State getState() {
     return delegate.getState();
   }
 
   // o.a.c.tracing.Tracing.newSession must use the same propagation format
   static final class PropagatingTracingSession extends TracingSession {
-
     PropagatingTracingSession(CassandraClientTracing cassandraTracing, Session target) {
       super(cassandraTracing, target);
     }
 
-    @Override
-    void maybeDecorate(Statement statement, Span span) {
+    @Override void maybeDecorate(Statement statement, Span span) {
       statement.enableTracing();
       Map<String, ByteBuffer> payload = new LinkedHashMap<>();
       if (statement.getOutgoingPayload() != null) {
