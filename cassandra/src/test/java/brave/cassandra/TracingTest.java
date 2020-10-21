@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2019 The OpenZipkin Authors
+ * Copyright 2017-2020 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -13,25 +13,25 @@
  */
 package brave.cassandra;
 
+import brave.propagation.StrictCurrentTraceContext;
+import brave.test.TestSpanHandler;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.List;
 import org.junit.After;
 import org.junit.Test;
-import zipkin2.Span;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class TracingTest {
-  List<Span> spans = new ArrayList<>();
+  StrictCurrentTraceContext currentTraceContext = StrictCurrentTraceContext.create();
+  TestSpanHandler spans = new TestSpanHandler();
   brave.Tracing tracing = brave.Tracing.newBuilder()
-      .spanReporter(spans::add)
-      .build();
+      .currentTraceContext(currentTraceContext).addSpanHandler(spans).build();
   Tracing cassandraTracing = new Tracing(tracing);
 
   @After public void tearDown() {
     tracing.close();
+    currentTraceContext.close();
   }
 
   @Test public void spanFromPayload_startsTraceOnNullPayload() {
@@ -47,7 +47,7 @@ public class TracingTest {
   @Test public void spanFromPayload_resumesTraceOnB3SingleEntry() {
     assertThat(cassandraTracing.spanFromPayload(tracing.tracer(), Collections.singletonMap("b3",
         ByteBuffer.wrap(new byte[] {'0'}))))
-        .extracting(b -> b.isNoop())
+        .extracting(brave.Span::isNoop)
         .isEqualTo(Boolean.TRUE);
   }
 }

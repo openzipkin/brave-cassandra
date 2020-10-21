@@ -14,7 +14,9 @@
     the License.
 
 -->
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
   <groupId>io.zipkin.brave.cassandra</groupId>
@@ -33,20 +35,20 @@
     <project.build.resourceEncoding>UTF-8</project.build.resourceEncoding>
 
     <!-- default bytecode version for src/main -->
-    <main.java.version>1.7</main.java.version>
-    <main.signature.artifact>java17</main.signature.artifact>
+    <main.java.version>1.8</main.java.version>
+    <main.signature.artifact>java18</main.signature.artifact>
 
     <main.basedir>${project.basedir}</main.basedir>
-    <brave.version>5.12.6</brave.version>
+    <brave.version>5.12.7</brave.version>
 
     <log4j.version>2.13.3</log4j.version>
 
     <!-- override to set exclusions per-project -->
-    <errorprone.args />
+    <errorprone.args/>
     <errorprone.version>2.4.0</errorprone.version>
 
     <license-maven-plugin.version>3.0</license-maven-plugin.version>
-    <maven-failsafe-plugin.version>3.0.0-M3</maven-failsafe-plugin.version>
+    <maven-failsafe-plugin.version>3.0.0-M5</maven-failsafe-plugin.version>
   </properties>
 
   <name>Brave Cassandra (Parent)</name>
@@ -112,6 +114,9 @@
       <dependency>
         <groupId>org.apache.cassandra</groupId>
         <artifactId>cassandra-all</artifactId>
+        <!-- Avoid classpath problems, which go away if we switch to testcontainers to run Cassandra
+              * 3.11.8 - needs sun.misc
+              * 3.11.[567] - Missing protocol version limiter -->
         <version>3.11.4</version>
         <exclusions>
           <exclusion>
@@ -133,12 +138,12 @@
       <dependency>
         <groupId>com.datastax.cassandra</groupId>
         <artifactId>cassandra-driver-core</artifactId>
-        <version>3.8.0</version>
+        <version>3.10.2</version>
       </dependency>
       <dependency>
         <groupId>junit</groupId>
         <artifactId>junit</artifactId>
-        <version>4.13</version>
+        <version>4.13.1</version>
       </dependency>
       <dependency>
         <groupId>org.assertj</groupId>
@@ -176,6 +181,10 @@
       <scope>test</scope>
     </dependency>
     <dependency>
+      <groupId>io.zipkin.brave</groupId>
+      <artifactId>brave-tests</artifactId>
+    </dependency>
+    <dependency>
       <groupId>org.assertj</groupId>
       <artifactId>assertj-core</artifactId>
       <scope>test</scope>
@@ -183,6 +192,12 @@
     <dependency>
       <groupId>org.apache.logging.log4j</groupId>
       <artifactId>log4j-slf4j-impl</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-jul</artifactId>
+      <version>${log4j.version}</version>
       <scope>test</scope>
     </dependency>
   </dependencies>
@@ -194,10 +209,15 @@
         <plugin>
           <groupId>io.takari</groupId>
           <artifactId>maven</artifactId>
-          <version>0.7.6</version>
+          <version>0.7.7</version>
           <configuration>
-            <maven>3.6.2</maven>
+            <maven>3.6.3</maven>
           </configuration>
+        </plugin>
+
+        <plugin>
+          <artifactId>maven-remote-resources-plugin</artifactId>
+          <version>1.7.0</version>
         </plugin>
 
         <plugin>
@@ -213,7 +233,7 @@
 
         <plugin>
           <artifactId>maven-release-plugin</artifactId>
-          <version>2.5.3</version>
+          <version>3.0.0-M1</version>
           <configuration>
             <useReleaseProfile>false</useReleaseProfile>
             <releaseProfiles>release</releaseProfiles>
@@ -239,7 +259,6 @@
         <artifactId>maven-compiler-plugin</artifactId>
         <version>3.8.1</version>
         <configuration>
-          <!-- Retrolambda will rewrite lambdas as Java 6 bytecode -->
           <source>1.8</source>
           <target>1.8</target>
           <forceJavacCompilerUse>true</forceJavacCompilerUse>
@@ -248,45 +267,43 @@
       </plugin>
 
       <plugin>
-        <groupId>net.orfjackal.retrolambda</groupId>
-        <artifactId>retrolambda-maven-plugin</artifactId>
-        <version>2.5.6</version>
-        <executions>
-          <execution>
-            <goals>
-              <goal>process-main</goal>
-            </goals>
-            <configuration>
-              <target>${main.java.version}</target>
-              <fork>true</fork>
-              <quiet>true</quiet>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
-
-      <plugin>
         <artifactId>maven-jar-plugin</artifactId>
-        <version>3.1.2</version>
+        <version>3.2.0</version>
       </plugin>
 
       <plugin>
         <artifactId>maven-surefire-plugin</artifactId>
         <version>${maven-failsafe-plugin.version}</version>
+        <configuration>
+          <systemPropertyVariables>
+            <java.util.logging.manager>org.apache.logging.log4j.jul.LogManager
+            </java.util.logging.manager>
+          </systemPropertyVariables>
+          <!-- Ensure scope leak cause ends up in the console -->
+          <trimStackTrace>false</trimStackTrace>
+        </configuration>
       </plugin>
       <plugin>
         <artifactId>maven-failsafe-plugin</artifactId>
         <version>${maven-failsafe-plugin.version}</version>
+        <configuration>
+          <!-- Try to prevent flakes in CI -->
+          <reuseForks>false</reuseForks>
+          <!-- workaround to SUREFIRE-1831 -->
+          <useModulePath>false</useModulePath>
+          <systemPropertyVariables>
+            <java.util.logging.manager>org.apache.logging.log4j.jul.LogManager
+            </java.util.logging.manager>
+          </systemPropertyVariables>
+          <!-- Ensure scope leak cause ends up in the console -->
+          <trimStackTrace>false</trimStackTrace>
+        </configuration>
         <executions>
           <execution>
             <id>integration-test</id>
+            <phase>verify</phase>
             <goals>
               <goal>integration-test</goal>
-            </goals>
-          </execution>
-          <execution>
-            <id>verify</id>
-            <goals>
               <goal>verify</goal>
             </goals>
           </execution>
@@ -296,7 +313,7 @@
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>animal-sniffer-maven-plugin</artifactId>
-        <version>1.18</version>
+        <version>1.19</version>
         <configuration>
           <signature>
             <groupId>org.codehaus.mojo.signature</groupId>
@@ -354,7 +371,7 @@
 
       <plugin>
         <artifactId>maven-enforcer-plugin</artifactId>
-        <version>3.0.0-M2</version>
+        <version>3.0.0-M3</version>
         <executions>
           <execution>
             <id>enforce-java</id>
@@ -363,8 +380,11 @@
             </goals>
             <configuration>
               <rules>
+                <!-- Can't use JDK 15 due to:
+                     com.datastax.driver.core.exceptions.ServerError: An unexpected error occurred server side on /127.0.0.1:49702: java.lang.UnsupportedOperationException: can't get field offset on a hidden class: private final org.apache.cassandra.db.ClusteringComparator org.apache.cassandra.db.ClusteringComparator$$Lambda$157/0x0000000800de0040.arg$1
+                     -->
                 <requireJavaVersion>
-                  <version>[11,13)</version>
+                  <version>[11,15)</version>
                 </requireJavaVersion>
               </rules>
             </configuration>
@@ -420,7 +440,7 @@
           <!-- Creates source jar -->
           <plugin>
             <artifactId>maven-source-plugin</artifactId>
-            <version>3.1.0</version>
+            <version>3.2.1</version>
             <executions>
               <execution>
                 <id>attach-sources</id>
@@ -433,7 +453,7 @@
 
           <plugin>
             <artifactId>maven-javadoc-plugin</artifactId>
-            <version>3.1.1</version>
+            <version>3.2.0</version>
             <configuration>
               <failOnError>false</failOnError>
               <!-- hush pedantic warnings: we don't put param and return on everything! -->

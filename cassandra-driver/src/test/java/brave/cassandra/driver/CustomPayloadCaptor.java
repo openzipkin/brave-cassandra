@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2019 The OpenZipkin Authors
+ * Copyright 2017-2020 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -23,18 +23,16 @@ import org.apache.cassandra.tracing.TraceState;
 public class CustomPayloadCaptor extends org.apache.cassandra.tracing.Tracing {
   static final AtomicReference<Map<String, ByteBuffer>> ref = new AtomicReference<>();
 
-  @Override
-  protected void stopSessionImpl() {}
+  @Override protected void stopSessionImpl() {
+  }
 
-  @Override
-  protected UUID newSession(
+  @Override protected UUID newSession(
       UUID sessionId, TraceType traceType, Map<String, ByteBuffer> customPayload) {
     ref.set(customPayload);
     return sessionId;
   }
 
-  @Override
-  public TraceState begin(String s, InetAddress inetAddress, Map<String, String> map) {
+  @Override public TraceState begin(String s, InetAddress inetAddress, Map<String, String> map) {
     return null;
   }
 
@@ -43,6 +41,6 @@ public class CustomPayloadCaptor extends org.apache.cassandra.tracing.Tracing {
     return null;
   }
 
-  @Override
-  public void trace(ByteBuffer byteBuffer, String s, int i) {}
+  @Override public void trace(ByteBuffer byteBuffer, String s, int i) {
+  }
 }
