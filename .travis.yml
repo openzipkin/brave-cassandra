@@ -17,15 +17,39 @@ cache:
   directories:
     - $HOME/.m2
 
+# Require the branch name to be master (note for PRs this is the base branch name):
+#
+# This is a simplicity trade-off, particularly as we don't do branch releases anyway. If someone
+# makes a shared experimental branch, CI will only run on that, not sub-branches.
+branches:
+  only:
+    - master
+
+# Setup job conditions per stage. Note: the default "test" stage is redefined here.
+#
+# See https://docs.travis-ci.com/user/conditional-builds-stages-jobs#conditional-stages
+#     https://github.com/travis-ci/travis-conditions/
+stages:
+  - name: test
+    # Only once for a pull request, regardless of if it is a head branch or fork.
+    if: 'tag IS blank AND type IN (push, pull_request)'
+  - name: deploy-snapshots
+    # Deploy a SNAPSHOT when not a release trigger secure variables are available
+    if: 'tag IS blank AND type = push and env(SONATYPE_USER) IS present'
+  - name: deploy-release
+    # Deploy a release when a release trigger and secure variables are available
+    if: 'tag =~ /release-^[0-9]/ AND type = push and env(SONATYPE_USER) IS present'
+
 # Re-use JDK 11 from focal release instead of delaying build with installation
 before_install:
+  # Set prefix of commands used in release
+  #  * -Prelease ensures the core jar ends up JRE 1.6 compatible
+  - mvn_release="./mvnw --batch-mode -s ./.settings.xml -Prelease -nsu"
+
+  # Credentials entered into https://travis-ci.org/github/openzipkin/${REPO}/settings are access
+  # controlled by branch (typically only master). Check to see if a well-known env is available
+  # before attempting to log in.
   - |
-    # Cache as help:evaluate is not quick
-    export POM_VERSION=$(./mvnw help:evaluate -N -Dexpression=project.version -q -DforceStdout)
-  - |
-    # Credentials entered into https://travis-ci.org/github/openzipkin/${REPO}/settings are access
-    # controlled by branch (typically only master). Check to see if a well-known env is available
-    # before attempting to log in.
     if [[ -n "$SONATYPE_USER" ]]; then
       # allocate commits to CI, not the owner of the deploy key
       git config user.name "zipkinci"
@@ -33,25 +57,51 @@ before_install:
 
       # setup https authentication credentials, used by ./mvnw release:prepare
       git config credential.helper "store --file=.git/credentials"
-      echo "https://$GH_TOKEN:@github.com" > .git/credentials
+      echo "https://$GH_TOKEN:@github.com" > .git/credentials || travis_terminate 1
 
       # ensure GPG commands work non-interactively
       export GPG_TTY=$(tty)
       # import signing key used for jar files
-      echo ${GPG_SIGNING_KEY} | base64 --decode | gpg --batch --passphrase ${GPG_PASSPHRASE} --import
+      echo ${GPG_SIGNING_KEY} | base64 --decode | gpg --batch --passphrase ${GPG_PASSPHRASE} --import || travis_terminate 1
     fi
 
-install:
-  - |
-    # use a go-offline that properly works with multi-module builds
-    ./mvnw -q --batch-mode -nsu -Prelease de.qaware.maven:go-offline-maven-plugin:resolve-dependencies
-script: ./travis/publish.sh
+# use a go-offline that properly works with multi-module builds
+install: ${mvn_release} de.qaware.maven:go-offline-maven-plugin:resolve-dependencies
 
-# Don't build release tags. This avoids publish conflicts because the version commit exists both on master and the release tag.
-# See https://github.com/travis-ci/travis-ci/issues/1532
-branches:
-  except:
-    - /^[0-9]/
+jobs:
+  include:
+    - stage: test
+      name: "Run unit and integration tests"
+      script: ./mvnw verify -nsu
+    - stage: deploy-snapshots
+      name: "Deploy snapshots to Sonatype"
+      script: ${mvn_release} deploy
+    - stage: deploy-release
+      name: "Deploy release to Sonatype"
+      # -Prelease ensures the core jar ends up JRE 1.6 compatible
+      script:
+        # Checkout master, as we release from master, not a tag ref
+        - git checkout -B master || travis_terminate 1
+        # Ensure no one pushed commits since this release tag as it would fail later commands
+        - |
+          git fetch origin master:origin/master || travis_terminate 1
+          commit_local_master=$(git show --pretty='format:%H' master) || travis_terminate 1
+          commit_remote_master=$(git show --pretty='format:%H' origin/master) || travis_terminate 1
+          if [ "$commit_local_master" != "$commit_remote_master" ]; then
+            echo "Master on remote 'origin' has commits since the version under release, aborting"
+            travis_terminate 1
+          fi
+        # Get the release version from the build tag
+        - release_version=$(echo "${TRAVIS_TAG}" | sed 's/^release-//') || travis_terminate 1
+        # Prepare and push release commits. '[skip ci]' ensures Travis doesn't build these commits.
+        # These commits push immediately as time uploading deployments adds git conflict risk.
+        - |
+          ${mvn_release} -DscmCommentPrefix="[maven-release-plugin][skip ci] " \
+          -DreleaseVersion=${release_version} -Darguments=-DskipTests release:prepare || travis_terminate 1
+        # Once this works, deploy to Sonatype, which synchronizes to maven central
+        - |
+          git checkout ${release_version} || travis_terminate 1
+          ${mvn_release} -DskipTests clean deploy || travis_terminate 1
 
 notifications:
   webhooks:
