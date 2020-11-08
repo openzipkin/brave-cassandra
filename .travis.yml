@@ -66,7 +66,7 @@ jobs:
       script: ${mvn_release} deploy
     # Deploy a release when a release trigger and secure variables are available
     - stage: deploy
-      if: 'branch = master AND tag =~ /^release-[0-9]/ AND type = push and env(SONATYPE_USER) IS present'
+      if: 'tag =~ /^release-[0-9]/ AND type = push and env(SONATYPE_USER) IS present'
       name: "Deploy release to Sonatype"
       script:
         # Checkout master, as we release from master, not a tag ref
