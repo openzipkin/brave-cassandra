@@ -45,25 +45,24 @@ before_install:
 # use a go-offline that properly works with multi-module builds
 install: ${mvn_release} de.qaware.maven:go-offline-maven-plugin:resolve-dependencies
 
-# Add deployment jobs
+# Add deployment jobs. Note: "branch = master" for PRs, this is the base branch name.
 #
 # See https://docs.travis-ci.com/user/conditional-builds-stages-jobs#conditional-stages
 #     https://github.com/travis-ci/travis-conditions/
 jobs:
   include:
-    # See https://docs.travis-ci.com/user/build-stages/warm-cache/
-    - stage: prepare cache
-      name: "Prepare cache for this branch"
-      script: true
     - stage: test
+      # We run tests on non-tagged pushes to master that aren't commit made by the release plugin
+      # We also run tests on pull requests targeted at the master branch.
       if: |
-          tag IS blank AND commit_message !~ /maven-release-plugin/ AND \
+          branch = master AND tag IS blank AND \
+          commit_message !~ /maven-release-plugin/ AND \
           type IN (push, pull_request)
       name: "Run unit and integration tests"
       script: ./mvnw verify -nsu || travis_terminate 1
     - stage: deploy
-      # If we are on master, deploy unless this is a commit made by the release plugin
-      # If we are on a release tag, deploy it
+      # If we are on master, deploy a SNAPSHOT (unless this is a commit made by the release plugin)
+      # If we are on a version tag, deploy it to Sonatype (automatically releases to Maven Central)
       if: |
           ( ( branch = master AND tag IS blank AND commit_message !~ /maven-release-plugin/ ) OR
               tag =~ ^[0-9]+\.[0-9]+\.[0-9]+ ) AND \
