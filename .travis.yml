@@ -54,6 +54,11 @@ script:
       ./mvnw verify -nsu
     fi
 
+stages:
+  # The default stage is test, which runs on all architectures
+  - test
+  - name: deploy
+
 # Add deployment jobs
 #
 # See https://docs.travis-ci.com/user/conditional-builds-stages-jobs#conditional-stages
@@ -61,11 +66,13 @@ script:
 jobs:
   include:
     # Deploy a SNAPSHOT when not a release trigger secure variables are available
-    - if: 'branch = master AND tag IS blank AND type = push and env(SONATYPE_USER) IS present'
+    - stage: deploy
+      if: 'branch = master AND tag IS blank AND type = push and env(SONATYPE_USER) IS present'
       name: "Deploy snapshots to Sonatype"
       script: ${mvn_release} deploy
     # Deploy a release when a release trigger and secure variables are available
-    - if: 'branch = master AND tag =~ /^release-[0-9]/ AND type = push and env(SONATYPE_USER) IS present'
+    - stage: deploy
+      if: 'branch = master AND tag =~ /^release-[0-9]/ AND type = push and env(SONATYPE_USER) IS present'
       name: "Deploy release to Sonatype"
       script:
         # Checkout master, as we release from master, not a tag ref
