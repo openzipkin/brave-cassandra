@@ -58,12 +58,12 @@ jobs:
     # The default stage is test, which runs on all architectures
     - stage: test
       name: "Run unit and integration tests"
-      script: ./mvnw verify -nsu
+      script: ./mvnw verify -nsu || travis_terminate 1
     # Deploy a SNAPSHOT when not a release trigger secure variables are available
     - stage: deploy
       if: 'branch = master AND tag IS blank AND type = push and env(SONATYPE_USER) IS present'
       name: "Deploy snapshots to Sonatype"
-      script: ./mvnw verify -nsu && ${mvn_release} deploy
+      script: ${mvn_release} deploy
     # Deploy a release when a release trigger and secure variables are available
     - stage: deploy
       if: 'branch = master AND tag =~ /^release-[0-9]/ AND type = push and env(SONATYPE_USER) IS present'
