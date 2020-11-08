@@ -57,6 +57,7 @@ jobs:
       script: true
     # The default stage is test, which runs on all architectures
     - stage: test
+      if: 'tag IS blank AND type IN (push, pull_request)'
       name: "Run unit and integration tests"
       script: ./mvnw verify -nsu || travis_terminate 1
     # Deploy a SNAPSHOT when not a release trigger secure variables are available
