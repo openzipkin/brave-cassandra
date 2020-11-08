@@ -17,29 +17,6 @@ cache:
   directories:
     - $HOME/.m2
 
-# Require the branch name to be master (note for PRs this is the base branch name):
-#
-# This is a simplicity trade-off, particularly as we don't do branch releases anyway. If someone
-# makes a shared experimental branch, CI will only run on that, not sub-branches.
-branches:
-  only:
-    - master
-
-# Setup job conditions per stage. Note: the default "test" stage is redefined here.
-#
-# See https://docs.travis-ci.com/user/conditional-builds-stages-jobs#conditional-stages
-#     https://github.com/travis-ci/travis-conditions/
-stages:
-  - name: test
-    # Only once for a pull request, regardless of if it is a head branch or fork.
-    if: 'tag IS blank AND type IN (push, pull_request)'
-  - name: deploy-snapshots
-    # Deploy a SNAPSHOT when not a release trigger secure variables are available
-    if: 'tag IS blank AND type = push and env(SONATYPE_USER) IS present'
-  - name: deploy-release
-    # Deploy a release when a release trigger and secure variables are available
-    if: 'tag =~ /release-^[0-9]/ AND type = push and env(SONATYPE_USER) IS present'
-
 # Re-use JDK 11 from focal release instead of delaying build with installation
 before_install:
   # Set prefix of commands used in release
@@ -67,12 +44,24 @@ before_install:
 
 # use a go-offline that properly works with multi-module builds
 install: ${mvn_release} de.qaware.maven:go-offline-maven-plugin:resolve-dependencies
+script: ./mvnw verify -nsu || travis_terminate 1
+
+# Setup job conditions per stage. Note: the default "test" stage is redefined here.
+#
+# See https://docs.travis-ci.com/user/conditional-builds-stages-jobs#conditional-stages
+#     https://github.com/travis-ci/travis-conditions/
+stages:
+  # The default stage is test, which controls commit status in GitHub
+  - test
+  - name: deploy-snapshots
+    # Deploy a SNAPSHOT when not a release trigger secure variables are available
+    if: 'branch = master AND tag IS blank AND type = push and env(SONATYPE_USER) IS present'
+  - name: deploy-release
+    # Deploy a release when a release trigger and secure variables are available
+    if: 'branch = master AND tag =~ /release-^[0-9]/ AND type = push and env(SONATYPE_USER) IS present'
 
 jobs:
   include:
-    - stage: test
-      name: "Run unit and integration tests"
-      script: ./mvnw verify -nsu
     - stage: deploy-snapshots
       name: "Deploy snapshots to Sonatype"
       script: ${mvn_release} deploy
@@ -102,8 +91,6 @@ jobs:
         - |
           git checkout ${release_version} || travis_terminate 1
           ${mvn_release} -DskipTests clean deploy || travis_terminate 1
-
-script: echo "All jobs should control the build script explicitly" && travis_terminate 1
 
 notifications:
   webhooks:
