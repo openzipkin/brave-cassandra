@@ -103,6 +103,8 @@ jobs:
           git checkout ${release_version} || travis_terminate 1
           ${mvn_release} -DskipTests clean deploy || travis_terminate 1
 
+script: echo "All jobs should control the build script explicitly" && travis_terminate 1
+
 notifications:
   webhooks:
     urls:
