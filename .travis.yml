@@ -30,9 +30,8 @@ branches:
 # See https://docs.travis-ci.com/user/conditional-builds-stages-jobs#conditional-stages
 #     https://github.com/travis-ci/travis-conditions/
 stages:
-  - name: test
-    # Only once for a pull request, regardless of if it is a head branch or fork.
-    if: 'tag IS blank AND type IN (push, pull_request)'
+  # The default stage is test, which controls the pull request status
+  - test
   - name: deploy-snapshots
     # Deploy a SNAPSHOT when not a release trigger secure variables are available
     if: 'tag IS blank AND type = push and env(SONATYPE_USER) IS present'
@@ -67,12 +66,10 @@ before_install:
 
 # use a go-offline that properly works with multi-module builds
 install: ${mvn_release} de.qaware.maven:go-offline-maven-plugin:resolve-dependencies
+script: ./mvnw verify -nsu || travis_terminate 1
 
 jobs:
   include:
-    - stage: test
-      name: "Run unit and integration tests"
-      script: ./mvnw verify -nsu
     - stage: deploy-snapshots
       name: "Deploy snapshots to Sonatype"
       script: ${mvn_release} deploy
@@ -102,8 +99,6 @@ jobs:
         - |
           git checkout ${release_version} || travis_terminate 1
           ${mvn_release} -DskipTests clean deploy || travis_terminate 1
-
-script: echo "All jobs should control the build script explicitly" && travis_terminate 1
 
 notifications:
   webhooks:
