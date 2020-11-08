@@ -44,20 +44,6 @@ before_install:
 
 # use a go-offline that properly works with multi-module builds
 install: ${mvn_release} de.qaware.maven:go-offline-maven-plugin:resolve-dependencies
-# The default stage is test, which controls commit status in GitHub
-script:
-  - |
-    if [[ "${TRAVIS_TAG}" =~ ^release-[0-9] ]]; then
-      echo "Build started by release trigger. Skipping tests..."
-      true
-    else
-      ./mvnw verify -nsu
-    fi
-
-stages:
-  # The default stage is test, which runs on all architectures
-  - test
-  - name: deploy
 
 # Add deployment jobs
 #
@@ -65,11 +51,19 @@ stages:
 #     https://github.com/travis-ci/travis-conditions/
 jobs:
   include:
+    # See https://docs.travis-ci.com/user/build-stages/warm-cache/
+    - stage: prepare cache
+      name: "Prepare cache for this branch"
+      script: true
+    # The default stage is test, which runs on all architectures
+    - stage: test
+      name: "Run unit and integration tests"
+      script: ./mvnw verify -nsu
     # Deploy a SNAPSHOT when not a release trigger secure variables are available
     - stage: deploy
       if: 'branch = master AND tag IS blank AND type = push and env(SONATYPE_USER) IS present'
       name: "Deploy snapshots to Sonatype"
-      script: ${mvn_release} deploy
+      script: ./mvnw verify -nsu && ${mvn_release} deploy
     # Deploy a release when a release trigger and secure variables are available
     - stage: deploy
       if: 'branch = master AND tag =~ /^release-[0-9]/ AND type = push and env(SONATYPE_USER) IS present'
