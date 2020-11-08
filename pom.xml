@@ -24,7 +24,7 @@
 
   <modules>
     <module>cassandra</module>
-    <module>cassandra-driver</module>
+    <module>cassandra-not-driver</module>
     <module>cassandra-tests</module>
   </modules>
 
