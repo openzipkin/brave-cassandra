@@ -55,20 +55,28 @@ jobs:
     - stage: prepare cache
       name: "Prepare cache for this branch"
       script: true
-    # The default stage is test, which runs on all architectures
     - stage: test
-      if: 'tag IS blank AND type IN (push, pull_request)'
+      if: |
+          tag IS blank AND commit_message !~ /maven-release-plugin/ AND \
+          type IN (push, pull_request)
       name: "Run unit and integration tests"
       script: ./mvnw verify -nsu || travis_terminate 1
-    # Deploy a SNAPSHOT when not a release trigger secure variables are available
     - stage: deploy
-      if: 'branch = master AND tag IS blank AND type = push and env(SONATYPE_USER) IS present'
-      name: "Deploy snapshots to Sonatype"
-      script: ${mvn_release} deploy
+      # If we are on master, deploy unless this is a commit made by the release plugin
+      # If we are on a release tag, deploy it
+      if: |
+          ( ( branch = master AND tag IS blank AND commit_message !~ /maven-release-plugin/ ) OR
+              tag =~ ^[0-9]+\.[0-9]+\.[0-9]+ ) AND \
+          type = push AND env(SONATYPE_USER) IS present
+      name: "Deploy a SNAPSHOT or release to Sonatype"
+      # travis_wait ensures upload delays don't kill the deployment
+      script: travis_wait ${mvn_release} deploy
     # Deploy a release when a release trigger and secure variables are available
-    - stage: deploy
-      if: 'tag =~ /^release-[0-9]/ AND type = push and env(SONATYPE_USER) IS present'
-      name: "Deploy release to Sonatype"
+    - stage: create release
+      if: |
+          tag =~ ^release-[0-9]+\.[0-9]+\.[0-9]+ AND \
+          type = push AND env(SONATYPE_USER) IS present
+      name: "Create release"
       script:
         # Checkout master, as we release from master, not a tag ref
         - git checkout -B master || travis_terminate 1
@@ -87,13 +95,7 @@ jobs:
           git push origin :"${TRAVIS_TAG}"
         # Prepare and push release commits. '[skip ci]' ensures Travis doesn't build these commits.
         # These commits push immediately as time uploading deployments adds git conflict risk.
-        - |
-          ${mvn_release} -DscmCommentPrefix="[maven-release-plugin][skip ci] " \
-          -DreleaseVersion=${release_version} -Darguments=-DskipTests release:prepare || travis_terminate 1
-        # Once this works, deploy to Sonatype, which synchronizes to maven central
-        - |
-          git checkout ${release_version} || travis_terminate 1
-          ${mvn_release} -DskipTests clean deploy || travis_terminate 1
+        - ${mvn_release} -DreleaseVersion=${release_version} -Darguments=-DskipTests release:prepare
 
 notifications:
   webhooks:
