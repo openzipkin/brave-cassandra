@@ -44,30 +44,29 @@ before_install:
 
 # use a go-offline that properly works with multi-module builds
 install: ${mvn_release} de.qaware.maven:go-offline-maven-plugin:resolve-dependencies
-script: ./mvnw verify -nsu || travis_terminate 1
+# The default stage is test, which controls commit status in GitHub
+script:
+  - |
+    if [[ "${TRAVIS_TAG}" =~ ^release-[0-9] ]]; then
+      echo "Build started by release trigger. Skipping tests..."
+      true
+    else
+      ./mvnw verify -nsu
+    fi
 
-# Setup job conditions per stage. Note: the default "test" stage is redefined here.
+# Add deployment jobs
 #
 # See https://docs.travis-ci.com/user/conditional-builds-stages-jobs#conditional-stages
 #     https://github.com/travis-ci/travis-conditions/
-stages:
-  # The default stage is test, which controls commit status in GitHub
-  - test
-  - name: deploy-snapshots
-    # Deploy a SNAPSHOT when not a release trigger secure variables are available
-    if: 'branch = master AND tag IS blank AND type = push and env(SONATYPE_USER) IS present'
-  - name: deploy-release
-    # Deploy a release when a release trigger and secure variables are available
-    if: 'branch = master AND tag =~ /release-^[0-9]/ AND type = push and env(SONATYPE_USER) IS present'
-
 jobs:
   include:
-    - stage: deploy-snapshots
+    # Deploy a SNAPSHOT when not a release trigger secure variables are available
+    - if: 'branch = master AND tag IS blank AND type = push and env(SONATYPE_USER) IS present'
       name: "Deploy snapshots to Sonatype"
       script: ${mvn_release} deploy
-    - stage: deploy-release
+    # Deploy a release when a release trigger and secure variables are available
+    - if: 'branch = master AND tag =~ /^release-[0-9]/ AND type = push and env(SONATYPE_USER) IS present'
       name: "Deploy release to Sonatype"
-      # -Prelease ensures the core jar ends up JRE 1.6 compatible
       script:
         # Checkout master, as we release from master, not a tag ref
         - git checkout -B master || travis_terminate 1
@@ -80,8 +79,10 @@ jobs:
             echo "Master on remote 'origin' has commits since the version under release, aborting"
             travis_terminate 1
           fi
-        # Get the release version from the build tag
-        - release_version=$(echo "${TRAVIS_TAG}" | sed 's/^release-//') || travis_terminate 1
+        # Get the release version from the trigger tag, then delete it.
+        - |
+          release_version=$(echo "${TRAVIS_TAG}" | sed 's/^release-//') || travis_terminate 1
+          git push origin :"${TRAVIS_TAG}"
         # Prepare and push release commits. '[skip ci]' ensures Travis doesn't build these commits.
         # These commits push immediately as time uploading deployments adds git conflict risk.
         - |
