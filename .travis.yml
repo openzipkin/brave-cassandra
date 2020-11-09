@@ -44,7 +44,6 @@ jobs:
               tag =~ ^[0-9]+\.[0-9]+\.[0-9]+ ) AND \
           type = push AND env(SONATYPE_USER) IS present
       name: "Deploy a SNAPSHOT or release to Sonatype"
-      # travis_wait ensures upload delays don't kill the deployment
       script:
         # Setup GPG to sign the artifacts uploaded to Sonatype
         - |
