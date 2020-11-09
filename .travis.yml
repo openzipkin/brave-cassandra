@@ -21,7 +21,7 @@ cache:
 before_install:
   # Set prefix of commands used in release
   #  * -Prelease ensures the core jar ends up JRE 1.6 compatible
-  - mvn_release="./mvnw --batch-mode -s ./.settings.xml -Prelease -nsu"
+  - mvn_release="./mvnw --batch-mode -s ./.settings.xml -Prelease -nsu -DskipTests"
 
   # Credentials entered into https://travis-ci.org/github/openzipkin/${REPO}/settings are access
   # controlled by branch (typically only master). Check to see if a well-known env is available
