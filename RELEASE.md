@@ -69,16 +69,14 @@ export SONATYPE_USER=your_sonatype_account
 export SONATYPE_PASSWORD=your_sonatype_password
 release_version=xx-version-to-release-xx
 
-# -Prelease ensures the core jar ends up JRE 1.6 compatible
-mvn_release="./mvnw --batch-mode -s ./.settings.xml -Prelease -nsu"
-
 # Prepare and push release commits. These commits push immediately as time uploading deployments
 # adds git conflict risk.
-${mvn_release} -DreleaseVersion=${release_version} -Darguments=-DskipTests release:prepare
+./mvnw --batch-mode -nsu -DreleaseVersion=${release_version} -Darguments=-DskipTests release:prepare
 
 # Once this works, deploy to Sonatype, which synchronizes to maven central
 git checkout ${release_version}
-${mvn_release} -DskipTests deploy
+# -Prelease ensures the core jar ends up JRE 1.6 compatible
+./mvnw --batch-mode -s ./.settings.xml -Prelease -nsu -DskipTests deploy
 
 # Once all the above worked, clean up the release
 ./mvnw release:clean
