@@ -1,7 +1,8 @@
 # Run `travis lint` when changing this file to avoid breaking the build.
 
 # See https://docs.travis-ci.com/user/reference/overview/#for-a-particular-travisyml-configuration
-arch: amd64           # Use default architecture
+arch: arm64-graviton2 # Use AWS Graviton2
+group: edge           # Required with arm64-graviton2 per https://blog.travis-ci.com/2020-09-11-arm-on-aws
 virt: lxd             # LXD containers where possible as they boot much faster than full VMs
 os: linux             # required for arch different than amd64
 dist: focal           # newest available distribution
