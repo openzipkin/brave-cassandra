@@ -11,6 +11,7 @@ dist: focal           # newest available distribution
 git:
   depth: false
 
+# Re-use JDK 11 from focal release instead of delaying build with installation
 language: java
 
 cache:
