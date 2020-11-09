@@ -75,7 +75,6 @@ release_version=xx-version-to-release-xx
 
 # Once this works, deploy to Sonatype, which synchronizes to maven central
 git checkout ${release_version}
-# -Prelease ensures the core jar ends up JRE 1.6 compatible
 ./mvnw --batch-mode -s ./.settings.xml -Prelease -nsu -DskipTests deploy
 
 # Once all the above worked, clean up the release
