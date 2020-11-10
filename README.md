@@ -17,8 +17,13 @@ server integration is in place, cassandra will contribute data to these
 RPC spans.
 
 ## Artifacts
-Artifacts are under the maven group id `io.zipkin.brave.cassandra`
+All artifacts publish to the group ID "io.zipkin.brave.cassandra". We use a common
+release version for all components.
+
 ### Library Releases
-Releases are uploaded to [Bintray](https://bintray.com/openzipkin/maven/brave-cassandra) and synchronized to [Maven Central](http://search.maven.org/#search%7Cga%7C1%7Cg%3A%22io.zipkin.brave.cassandra%22)
+Snapshots are uploaded to [Sonatype](https://oss.sonatype.org/content/repositories/releases/io/zipkin/brave/cassandra) which
+synchronizes with [Maven Central](http://search.maven.org/#search%7Cga%7C1%7Cg%3A%22io.zipkin.brave.cassandra%22)
+
 ### Library Snapshots
-Snapshots are uploaded to [JFrog](http://oss.jfrog.org/artifactory/oss-snapshot-local) after commits to master.
+Snapshots are uploaded to [Sonatype](https://oss.sonatype.org/content/repositories/snapshots) after
+commits to master.
