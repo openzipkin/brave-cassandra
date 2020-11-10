@@ -57,9 +57,13 @@ jobs:
       # conditions here don't match the release conditions.
       before_install:
         - |
-          if [ -n "${TRAVIS_COMMIT_RANGE}" ] && git diff --name-only "${TRAVIS_COMMIT_RANGE}" -- | grep -qv '\.md$'; then
-            echo "Stopping job as changes only affect documentation (ex. README.md)"
-            travis_terminate 0
+          if [ -n "${TRAVIS_COMMIT_RANGE}" ]; then
+            CHANGES=$(git diff --name-only "${TRAVIS_COMMIT_RANGE}" --) || travis_terminate 1
+            echo ${CHANGES}
+            if echo ${CHANGES} | grep -qv '\.md$'; then
+              echo "Stopping job as changes only affect documentation (ex. README.md)"
+              travis_terminate 0
+            fi
           fi
       script: ./mvnw verify -nsu || travis_terminate 1
     - stage: deploy
