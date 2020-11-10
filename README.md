@@ -1,5 +1,5 @@
 [![Gitter chat](http://img.shields.io/badge/gitter-join%20chat%20%E2%86%92-brightgreen.svg)](https://gitter.im/openzipkin/zipkin)
-[![Build Status](https://circleci.com/gh/openzipkin/brave-cassandra.svg?style=svg)](https://circleci.com/gh/openzipkin/brave-cassandra)
+[![Build Status](https://travis-ci.com/openzipkin/brave-cassandra.svg?branch=master)](https://travis-ci.com/openzipkin/brave-cassandra)
 [![Maven Central](https://img.shields.io/maven-central/v/io.zipkin.brave.cassandra/brave-instrumentation-cassandra.svg)](https://search.maven.org/search?q=g:io.brave.cassandra%20AND%20a:brave-instrumentation-cassandra)
 
 # brave-cassandra

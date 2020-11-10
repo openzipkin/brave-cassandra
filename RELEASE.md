@@ -20,7 +20,7 @@ This repo uses semantic versions. Please keep this in mind when choosing version
 ## Credentials
 
 The release process uses various credentials. If you notice something failing due to unauthorized,
-look at the notes in [.travis.yml] and check the [project settings](https://travis-ci.org/github/openzipkin/zipkin/settings)
+look at the notes in [.travis.yml] and check the [project settings](https://travis-ci.com/github/openzipkin/zipkin/settings)
 
 ### Troubleshooting invalid credentials
 
@@ -34,7 +34,7 @@ is a good way to validate that your unencrypted credentials are authorized.
 
 Here's an example of a snapshot deploy with specified credentials.
 ```bash
-$ export GPG_TTY=$(tty) && GPG_PASSPHRASE=whackamole SONATYPE_USER=adrianmole SONATYPE_PASSWORD=ed6f20bde9123bbb2312b221 TRAVIS_PULL_REQUEST=false TRAVIS_TAG= TRAVIS_BRANCH=master travis/publish.sh
+$ export GPG_TTY=$(tty) && GPG_PASSPHRASE=whackamole SONATYPE_USER=adrianmole SONATYPE_PASSWORD=ed6f20bde9123bbb2312b221 ./mvnw --batch-mode -s ./.settings.xml -Prelease -nsu -DskipTests deploy
 ```
 
 ## First release of the year
@@ -69,16 +69,13 @@ export SONATYPE_USER=your_sonatype_account
 export SONATYPE_PASSWORD=your_sonatype_password
 release_version=xx-version-to-release-xx
 
-# -Prelease ensures the core jar ends up JRE 1.6 compatible
-mvn_release="./mvnw --batch-mode -s ./.settings.xml -Prelease -nsu"
-
 # Prepare and push release commits. These commits push immediately as time uploading deployments
 # adds git conflict risk.
-${mvn_release} -DreleaseVersion=${release_version} -Darguments=-DskipTests release:prepare
+./mvnw --batch-mode -nsu -DreleaseVersion=${release_version} -Darguments=-DskipTests release:prepare
 
 # Once this works, deploy to Sonatype, which synchronizes to maven central
 git checkout ${release_version}
-${mvn_release} -DskipTests deploy
+./mvnw --batch-mode -s ./.settings.xml -Prelease -nsu -DskipTests deploy
 
 # Once all the above worked, clean up the release
 ./mvnw release:clean
