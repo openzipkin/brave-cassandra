@@ -8,12 +8,12 @@ Brave for Apache Cassandra allows you to trace activities started from the Datas
 This repository includes tracing wrappers for [DataStax Java Driver](https://github.com/datastax/java-driver) and an [Apache Cassandra tracing implementation](https://github.com/apache/cassandra/blob/trunk/src/java/org/apache/cassandra/tracing/Tracing.java)
 
 `brave.cassandra.Tracing` extracts trace state from the custom payload
-of incoming requests. How long each request takes, each suboperation,
-and relevant tags like the session ID are reported to Zipkin.
+of incoming requests. How long each request takes, each sub-operation,
+and relevant tags like the session ID report to Zipkin.
     
 `brave.cassandra.driver.TracingSession` tracks the client-side of cassandra and
 adds trace context to the custom payload of outgoing requests. If
-server integration is in place, cassandra will contribute data to these
+server integration is in place, Cassandra will contribute data to these
 RPC spans.
 
 ## Artifacts
