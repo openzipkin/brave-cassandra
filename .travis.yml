@@ -21,6 +21,19 @@ cache:
 # use a go-offline that properly works with multi-module builds
 install: ./mvnw --batch-mode de.qaware.maven:go-offline-maven-plugin:resolve-dependencies
 
+# Prevent test and SNAPSHOT deploy of a documentation-only change.
+#
+# if: conditions are preferred as they obviate job creation. However, they can only use
+# pre-defined env variables or globals that can be evaluated statically. The other way to skip
+# is to exit early. We do that here to prevent overhead of running tests and SNAPSHOT deploys
+# that only include Markdown (documentation) updates.
+_terminate_if_only_docs: &terminate_if_only_docs
+  - |
+    if [ -n "${TRAVIS_COMMIT_RANGE}" ] && ! git diff --name-only "${TRAVIS_COMMIT_RANGE}" -- | grep -qv '\.md$'; then
+      echo "Stopping job as changes only affect documentation (ex. README.md)"
+      travis_terminate 0
+    fi
+
 _deploy_script: &deploy_script
   script:
     # Setup GPG to sign the artifacts uploaded to Sonatype
@@ -45,22 +58,7 @@ jobs:
           branch = master AND tag IS blank AND commit_message !~ maven-release-plugin AND \
           type IN (push, pull_request)
       name: "Run unit and integration tests"
-      # Prevent test and SNAPSHOT deploy of a documentation-only change.
-      #
-      # if: conditions are preferred as they obviate job creation. However, they can only use
-      # pre-defined env variables or globals that can be evaluated statically. The other way to skip
-      # is to exit early. We do that here to prevent overhead of running tests and SNAPSHOT deploys
-      # that only include Markdown (documentation) updates. Early terminating here will also prevent
-      # the subsequent deploy SNAPSHOT job.
-      #
-      # Note: This early exit does not prevent a release tag on a doc-only commit because the if:
-      # conditions here don't match the release conditions.
-      before_install:
-        - |
-          if [ -n "${TRAVIS_COMMIT_RANGE}" ] && ! git diff --name-only "${TRAVIS_COMMIT_RANGE}" -- | grep -qv '\.md$'; then
-            echo "Stopping job as changes only affect documentation (ex. README.md)"
-            travis_terminate 0
-          fi
+      before_install: *terminate_if_only_docs
       script: ./mvnw verify -nsu || travis_terminate 1
     - stage: deploy
       # If we are on master, deploy a SNAPSHOT (unless this is a commit made by the release plugin)
@@ -68,6 +66,7 @@ jobs:
           branch = master AND tag IS blank AND commit_message !~ maven-release-plugin AND \
           type = push AND env(SONATYPE_USER) IS present
       name: "Deploy a SNAPSHOT to Sonatype"
+      before_install: *terminate_if_only_docs
       <<: *deploy_script
     - stage: deploy
       # If we are on a version tag, deploy it to Sonatype (automatically releases to Maven Central)
