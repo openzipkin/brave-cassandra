@@ -313,14 +313,43 @@
 
       <plugin>
         <artifactId>maven-surefire-plugin</artifactId>
-        <version>${maven-surefire-plugin.version}</version>
+        <version>${maven-failsafe-plugin.version}</version>
         <configuration>
-          <!-- brave-kafka-interceptor specific: SUREFIRE-1614 -->
-          <forkNode implementation="org.apache.maven.plugin.surefire.extensions.SurefireForkNodeFactory" />
+          <!-- Ensure scope leak cause ends up in the console -->
+          <trimStackTrace>false</trimStackTrace>
+          <!-- Don't add org.apache.logging.log4j.jul.LogManager here as it conflicts with
+               classloading, causing brave.test.propagation.PropagationTest to flake. -->
+          <classpathDependencyExcludes>
+            <classpathDependencyExclude>org.apache.logging.log4j:log4j-jul</classpathDependencyExclude>
+          </classpathDependencyExcludes>
+        </configuration>
+      </plugin>
+      <plugin>
+        <artifactId>maven-failsafe-plugin</artifactId>
+        <version>${maven-failsafe-plugin.version}</version>
+        <configuration>
+          <!-- Try to prevent flakes in CI -->
+          <reuseForks>false</reuseForks>
+          <!-- workaround to SUREFIRE-1831 -->
+          <useModulePath>false</useModulePath>
+          <!-- Brave and OkHttp MockWebServer log with java.util.logging. Adding the bridge allows
+               allows us to change scope and format via log4j2.properties -->
           <systemPropertyVariables>
             <java.util.logging.manager>org.apache.logging.log4j.jul.LogManager</java.util.logging.manager>
           </systemPropertyVariables>
+          <!-- Ensure scope leak cause ends up in the console -->
+          <trimStackTrace>false</trimStackTrace>
         </configuration>
+        <executions>
+          <execution>
+            <id>integration-test</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>integration-test</goal>
+              <goal>verify</goal>
+            </goals>
+          </execution>
+        </executions>
       </plugin>
 
       <!-- Ensure no Java 9+ api usage -->
