@@ -24,6 +24,7 @@ import org.apache.cassandra.db.SystemKeyspace;
 import org.apache.cassandra.db.commitlog.CommitLog;
 import org.apache.cassandra.io.util.FileUtils;
 import org.apache.cassandra.service.StorageService;
+import org.apache.cassandra.transport.ProtocolVersionLimit;
 import org.apache.cassandra.transport.Server;
 import org.junit.rules.ExternalResource;
 
@@ -114,7 +115,10 @@ public class CassandraRule extends ExternalResource {
     SystemKeyspace.finishStartup();
     StorageService.instance.initServer();
 
-    server = new Server.Builder().withHost(nativeAddr).withPort(nativePort).build();
+    server = new Server.Builder()
+        .withHost(nativeAddr)
+        .withPort(nativePort)
+        .withProtocolVersionLimit(ProtocolVersionLimit.SERVER_DEFAULT).build();
     server.start();
   }
 
