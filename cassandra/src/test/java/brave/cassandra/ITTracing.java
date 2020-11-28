@@ -22,7 +22,6 @@ import cassandra.ForwardingSpanHandler;
 import com.datastax.driver.core.BoundStatement;
 import com.datastax.driver.core.Cluster;
 import com.datastax.driver.core.Session;
-import com.github.dockerjava.api.command.InspectImageResponse;
 import java.io.File;
 import java.nio.ByteBuffer;
 import java.util.Collections;
@@ -34,11 +33,9 @@ import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.rules.DisableOnDebug;
 import org.junit.rules.Timeout;
-import org.testcontainers.DockerClientFactory;
 import org.testcontainers.Testcontainers;
 import org.testcontainers.images.RemoteDockerImage;
 import org.testcontainers.images.builder.ImageFromDockerfile;
-import org.testcontainers.utility.DockerImageName;
 import org.testcontainers.utility.MountableFile;
 import zipkin2.reporter.Reporter;
 import zipkin2.reporter.brave.ZipkinSpanHandler;
@@ -213,20 +210,9 @@ public class ITTracing extends ITRemote {
     String zipkinEndpoint =
         "http://host.testcontainers.internal:" + zipkinHttpPort + "/api/v2/spans";
 
-    return getDefaultEnv(CassandraContainer.IMAGE_NAME, "JAVA_OPTS")
+    // TODO: read prior JAVA_OPTS from base layer
+    return "-Xms256m -Xmx256m -XX:+ExitOnOutOfMemoryError -Djava.net.preferIPv4Stack=true"
         + " -Dcassandra.custom_tracing_class=" + Tracing.class.getName()
         + " -Dzipkin.fail_fast=true" + " -Dzipkin.http_endpoint=" + zipkinEndpoint;
-  }
-
-  /** Returns an existing env mapping for the given image or empty string. */
-  static String getDefaultEnv(DockerImageName imageName, String key) {
-    InspectImageResponse inspect = DockerClientFactory.instance()
-        .client().inspectImageCmd(imageName.asCanonicalNameString()).exec();
-    for (String env : inspect.getConfig().getEnv()) {
-      if (env.startsWith(key + "=")) {
-        return env.replace(key + "=", "");
-      }
-    }
-    return "";
   }
 }
