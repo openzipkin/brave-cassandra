@@ -50,7 +50,6 @@ public class CassandraContainer extends GenericContainer<CassandraContainer> {
   }
 
   public InetSocketAddress contactPoint() {
-    if (!isRunning()) throw new AssumptionViolatedException("Container isn't running");
     return new InetSocketAddress(getHost(), getMappedPort(CASSANDRA_PORT));
   }
 }
