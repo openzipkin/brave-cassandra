@@ -13,19 +13,23 @@
  */
 package brave.cassandra;
 
+import brave.handler.SpanHandler;
 import brave.propagation.TraceContext;
 import brave.test.ITRemote;
 import cassandra.CassandraContainer;
 import cassandra.ForwardHttpSpansToHandler;
+import cassandra.ForwardingSpanHandler;
 import com.datastax.driver.core.BoundStatement;
 import com.datastax.driver.core.Cluster;
 import com.datastax.driver.core.Session;
+import java.io.File;
 import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.function.Function;
 import org.jetbrains.annotations.NotNull;
-import org.junit.Rule;
+import org.junit.Before;
+import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.rules.DisableOnDebug;
 import org.junit.rules.Timeout;
@@ -47,10 +51,23 @@ public class ITTracing extends ITRemote {
   /** Builds a Cassandra image that adds {@link Tracing} and its dependencies in the classpath. */
   static RemoteDockerImage imageWithBraveTracer = new RemoteDockerImage(imageWithBraveTracer());
 
-  @Rule public ForwardHttpSpansToHandler zipkin = new ForwardHttpSpansToHandler(testSpanHandler);
-  @Rule public CassandraContainer cassandra = new CassandraContainer(imageWithBraveTracer)
-      .withEnv("LOGGING_LEVEL", "INFO")
-      .withEnv("JAVA_OPTS", javaOpts(zipkin.httpPort()));
+  // swap references on each method instead of starting Cassandra for each test
+  static SpanHandler currentSpanHandler = SpanHandler.NOOP;
+
+  @Before public void setCurrentSpanHandler() {
+    currentSpanHandler = testSpanHandler;
+  }
+
+  @ClassRule public static ForwardHttpSpansToHandler zipkin =
+      new ForwardHttpSpansToHandler(new ForwardingSpanHandler() {
+        @Override protected SpanHandler delegate() {
+          return currentSpanHandler;
+        }
+      });
+  @ClassRule public static CassandraContainer cassandra =
+      new CassandraContainer(imageWithBraveTracer)
+          .withEnv("LOGGING_LEVEL", "WARN")
+          .withEnv("JAVA_OPTS", javaOpts(zipkin.httpPort()));
 
   public ITTracing() {
     globalTimeout = new DisableOnDebug(Timeout.seconds(120)); // Cassandra takes longer than 20s
@@ -140,20 +157,28 @@ public class ITTracing extends ITRemote {
   static ImageFromDockerfile imageWithBraveTracer() {
     ImageFromDockerfile image = new ImageFromDockerfile("openzipkin/brave-cassandra:test");
     // First detect if we are in an IDE or failsafe. The latter will see our shaded jar.
-    MountableFile tracingCodeSource = codeSource(Tracing.class);
-    if (tracingCodeSource.getResolvedPath().contains("brave-instrumentation-cassandra")) {
+    String tracingPath =
+        Tracing.class.getProtectionDomain().getCodeSource().getLocation().getFile();
+    if (tracingPath.contains("brave-instrumentation-cassandra")) {
+      if (!tracingPath.endsWith("-all.jar")) { // then switch to it
+        tracingPath = tracingPath.replace(".jar", "-all.jar");
+      }
+      if (!new File(tracingPath).exists()) {
+        throw new AssertionError(tracingPath + " missing. Check maven-shade-plugin configuration");
+      }
+      MountableFile allJar = MountableFile.forHostPath(tracingPath);
       return image
-          .withFileFromTransferable("brave-instrumentation-cassandra.jar", tracingCodeSource)
+          .withFileFromTransferable("brave-instrumentation-cassandra-all.jar", allJar)
           .withDockerfileFromBuilder(
               builder -> builder.from(CassandraContainer.IMAGE_NAME.asCanonicalNameString())
-                  .add("brave-instrumentation-cassandra.jar",
-                      "lib/brave-instrumentation-cassandra.jar")
+                  .add("brave-instrumentation-cassandra-all.jar",
+                      "lib/brave-instrumentation-cassandra-all.jar")
           );
     }
 
     // Otherwise, we need references to our main classpath in Cassandra's classpath
     return image
-        .withFileFromTransferable("classes", tracingCodeSource)
+        .withFileFromTransferable("classes", codeSource(Tracing.class))
         .withFileFromTransferable("brave.jar", codeSource(brave.Tracing.class))
         .withFileFromTransferable("zipkin-reporter-brave.jar", codeSource(ZipkinSpanHandler.class))
         .withFileFromTransferable("zipkin-sender-urlconnection.jar",
@@ -187,7 +212,7 @@ public class ITTracing extends ITRemote {
 
     // TODO: read prior JAVA_OPTS from base layer
     return "-Xms256m -Xmx256m -XX:+ExitOnOutOfMemoryError -Djava.net.preferIPv4Stack=true"
-        + " -Dcassandra.custom_tracing_class=" + Tracing.class.getName() + " -Dzipkin.fail_fast=true"
-        + " -Dzipkin.http_endpoint=" + zipkinEndpoint;
+        + " -Dcassandra.custom_tracing_class=" + Tracing.class.getName()
+        + " -Dzipkin.fail_fast=true" + " -Dzipkin.http_endpoint=" + zipkinEndpoint;
   }
 }

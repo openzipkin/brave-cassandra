@@ -46,10 +46,7 @@ public class CassandraContainer extends GenericContainer<CassandraContainer> {
     withExposedPorts(CASSANDRA_PORT);
     waitStrategy = Wait.forHealthcheck();
     withStartupTimeout(Duration.ofMinutes(2));
-  }
-
-  @Override protected void containerIsCreated(String containerId) {
-    followOutput(new Slf4jLogConsumer(logger));
+    withLogConsumer(new Slf4jLogConsumer(logger));
   }
 
   public InetSocketAddress contactPoint() {
