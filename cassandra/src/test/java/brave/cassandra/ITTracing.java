@@ -210,7 +210,9 @@ public class ITTracing extends ITRemote {
     String zipkinEndpoint =
         "http://host.testcontainers.internal:" + zipkinHttpPort + "/api/v2/spans";
 
-    // TODO: read prior JAVA_OPTS from base layer
+    // We could read JAVA_OPTS from the image with DockerClient.inspectImageCmd, but that is a cure
+    // worse than the disease. It implies ensuring the image is pulled which can instantiate Docker
+    // when we intentionally skipped it via "docker.skip". Instead, we copy/paste.
     return "-Xms256m -Xmx256m -XX:+ExitOnOutOfMemoryError -Djava.net.preferIPv4Stack=true"
         + " -Dcassandra.custom_tracing_class=" + Tracing.class.getName()
         + " -Dzipkin.fail_fast=true" + " -Dzipkin.http_endpoint=" + zipkinEndpoint;
