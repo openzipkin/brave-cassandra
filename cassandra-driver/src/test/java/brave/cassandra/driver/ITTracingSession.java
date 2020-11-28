@@ -15,12 +15,13 @@ package brave.cassandra.driver;
 
 import brave.SpanCustomizer;
 import brave.handler.MutableSpan;
+import brave.internal.Nullable;
 import brave.propagation.B3SingleFormat;
 import brave.propagation.CurrentTraceContext.Scope;
 import brave.propagation.SamplingFlags;
 import brave.propagation.TraceContext;
 import brave.test.ITRemote;
-import cassandra.CassandraRule;
+import cassandra.CassandraContainer;
 import com.datastax.driver.core.Cluster;
 import com.datastax.driver.core.PreparedStatement;
 import com.datastax.driver.core.ResultSet;
@@ -29,47 +30,45 @@ import com.datastax.driver.core.Session;
 import com.datastax.driver.core.Statement;
 import com.datastax.driver.core.exceptions.DriverInternalError;
 import java.nio.ByteBuffer;
+import java.util.Map;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
 
 import static brave.Span.Kind.CLIENT;
 import static brave.propagation.SamplingFlags.NOT_SAMPLED;
 import static java.nio.charset.StandardCharsets.UTF_8;
-import static java.util.Collections.singleton;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.failBecauseExceptionWasNotThrown;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.Assume.assumeTrue;
+import static org.mockito.Mockito.spy;
 
 public class ITTracingSession extends ITRemote {
-  static {
-    System.setProperty("cassandra.custom_tracing_class", CustomPayloadCaptor.class.getName());
-  }
-
-  @ClassRule public static CassandraRule cassandra = new CassandraRule();
+  // Takes a while to startup, so we make this a class rule
+  @ClassRule public static CassandraContainer cassandra = new CassandraContainer();
 
   CassandraClientTracing cassandraTracing;
   Cluster cluster;
-  Session session;
+  Session session, spiedSession;
   PreparedStatement prepared;
 
   @Before public void setup() {
-    cluster =
-        Cluster.builder().addContactPointsWithPorts(singleton(cassandra.contactPoint())).build();
+    cluster = Cluster.builder().addContactPointsWithPorts(cassandra.contactPoint()).build();
     session = newSession(CassandraClientTracing.newBuilder(tracing).propagationEnabled(true));
-    CustomPayloadCaptor.ref.set(null);
   }
 
   @After public void close() {
-    if (session != null) session.close();
     if (cluster != null) cluster.close();
   }
 
   Session newSession(CassandraClientTracing.Builder builder) {
     cassandraTracing = builder.build();
-    Session result = TracingSession.create(cassandraTracing, cluster.connect());
-    prepared = result.prepare("SELECT * from system.schema_keyspaces");
+    spiedSession = spy(cluster.connect());
+    Session result = TracingSession.create(cassandraTracing, spiedSession);
+    prepared = result.prepare("SELECT release_version from system.local");
     return result;
   }
 
@@ -87,7 +86,7 @@ public class ITTracingSession extends ITRemote {
 
   // CASSANDRA-12835 particularly is in 3.11, which fixes simple (non-bound) statement tracing
   @Test public void propagatesTraceIds_regularStatement() {
-    session.execute("SELECT * from system.schema_keyspaces");
+    session.execute("SELECT release_version from system.local");
 
     TraceContext extracted = extractB3Header();
     assertThat(extracted.sampled()).isTrue();
@@ -111,7 +110,7 @@ public class ITTracingSession extends ITRemote {
     // span was reported
     testSpanHandler.takeRemoteSpan(CLIENT);
     // but nothing was propagated
-    assertThat(CustomPayloadCaptor.ref.get()).isNull();
+    assertThat(extractB3Header()).isNull();
   }
 
   @Test public void propagatesSampledFalse() {
@@ -141,17 +140,15 @@ public class ITTracingSession extends ITRemote {
   @Test public void reportsSpanOnTransportException() {
     cluster.close();
 
-    try {
-      invokeBoundStatement();
-      failBecauseExceptionWasNotThrown(DriverInternalError.class);
-    } catch (DriverInternalError e) {
-      testSpanHandler.takeRemoteSpanWithErrorMessage(CLIENT,
-          "Could not send request, session is closed");
-    }
+    assertThatThrownBy(this::invokeBoundStatement)
+        .isInstanceOf(DriverInternalError.class);
+
+    testSpanHandler.takeRemoteSpanWithErrorMessage(CLIENT,
+        "Could not send request, session is closed");
   }
 
   @Test public void addsErrorTag_onCanceledFuture() {
-    ResultSetFuture resp = session.executeAsync("SELECT * from system.schema_keyspaces");
+    ResultSetFuture resp = session.executeAsync("SELECT release_version from system.local");
     assumeTrue("lost race on cancel", resp.cancel(true));
 
     close(); // blocks until the cancel finished
@@ -209,8 +206,11 @@ public class ITTracingSession extends ITRemote {
     session.execute(prepared.bind());
   }
 
-  static TraceContext extractB3Header() {
-    ByteBuffer b3 = CustomPayloadCaptor.ref.get().get("b3");
-    return B3SingleFormat.parseB3SingleFormat(UTF_8.decode(b3)).context();
+  @Nullable TraceContext extractB3Header() {
+    ArgumentCaptor<Statement> captor = ArgumentCaptor.forClass(Statement.class);
+    Mockito.verify(spiedSession).executeAsync(captor.capture());
+    Map<String, ByteBuffer> payload = captor.getValue().getOutgoingPayload();
+    if (payload == null || payload.get("b3") == null) return null;
+    return B3SingleFormat.parseB3SingleFormat(UTF_8.decode(payload.get("b3"))).context();
   }
 }

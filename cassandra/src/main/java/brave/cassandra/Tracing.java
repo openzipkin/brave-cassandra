@@ -23,8 +23,12 @@ import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.UUID;
+import org.apache.cassandra.net.MessageIn;
 import org.apache.cassandra.tracing.TraceState;
+import org.apache.cassandra.tracing.TraceStateImpl;
 import org.apache.cassandra.utils.FBUtilities;
+import zipkin2.Call;
+import zipkin2.CheckResult;
 import zipkin2.reporter.brave.AsyncZipkinSpanHandler;
 import zipkin2.reporter.urlconnection.URLConnectionSender;
 
@@ -55,16 +59,39 @@ public class Tracing extends org.apache.cassandra.tracing.Tracing {
   public Tracing() {
     String endpoint = System.getProperty("zipkin.http_endpoint");
     if (endpoint == null) {
+      logger.info("using TracingComponent.Current");
       component = new TracingComponent.Current();
       return;
     }
-    AsyncZipkinSpanHandler zipkinSpanHandler =
-        AsyncZipkinSpanHandler.newBuilder(URLConnectionSender.create(endpoint)).build();
-    brave.Tracing tracing = brave.Tracing.newBuilder()
-        .localServiceName(System.getProperty("zipkin.service_name", "cassandra"))
-        .addSpanHandler(zipkinSpanHandler)
-        .build();
-    component = new TracingComponent.Explicit(tracing);
+
+    // Cassandra will not exit by default if tracing isn't working.
+    logger.info("using TracingComponent.Explicit(" + endpoint + ")");
+    URLConnectionSender sender = URLConnectionSender.create(endpoint);
+    try {
+      CheckResult check = sender.check();
+      if (!check.ok()) maybeFailFast(check.error());
+
+      AsyncZipkinSpanHandler zipkinSpanHandler = AsyncZipkinSpanHandler.create(sender);
+      // Make sure spans are reported on shutdown
+      Runtime.getRuntime().addShutdownHook(new Thread(zipkinSpanHandler::close));
+
+      brave.Tracing tracing = brave.Tracing.newBuilder()
+          .localServiceName(System.getProperty("zipkin.service_name", "cassandra"))
+          .addSpanHandler(zipkinSpanHandler)
+          .build();
+      component = new TracingComponent.Explicit(tracing);
+    } catch (RuntimeException | Error t) {
+      Call.propagateIfFatal(t);
+      maybeFailFast(t);
+      throw t;
+    }
+  }
+
+  static void maybeFailFast(Throwable error) {
+    if (Boolean.parseBoolean(System.getProperty("zipkin.fail_fast", "false"))) {
+      logger.error("Error initializing tracer: ", error);
+      System.exit(1);
+    }
   }
 
   /**
@@ -74,46 +101,61 @@ public class Tracing extends org.apache.cassandra.tracing.Tracing {
    */
   @Override protected final UUID newSession(
       UUID sessionId, TraceType traceType, Map<String, ByteBuffer> customPayload) {
-    Tracer tracer = component.tracer();
-    if (tracer == null || traceType == TraceType.NONE) {
-      return super.newSession(sessionId, traceType, customPayload);
-    }
-    Span span = spanFromPayload(tracer, customPayload).kind(SERVER);
-
     // override instead of call from super as otherwise we cannot store a reference to the span
     assert get() == null;
-    TraceState state = new ZipkinTraceState(coordinator, sessionId, traceType, span);
+
+    Tracer tracer = component.tracer();
+    TraceState state;
+    if (tracer == null || traceType != TraceType.QUERY) {
+      state = new TraceStateImpl(coordinator, sessionId, traceType);
+    } else {
+      Span span = spanFromPayload(tracer, customPayload).kind(SERVER);
+      state = new ZipkinTraceState(coordinator, sessionId, traceType, span);
+    }
+
     set(state);
     sessions.put(sessionId, state);
     return sessionId;
   }
 
+  @Override protected final TraceState newTraceState(
+      InetAddress coordinator, UUID sessionId, TraceType traceType) {
+    assert false : "we don't expect this to be ever reached as we override newSession";
+    return new TraceStateImpl(coordinator, sessionId, traceType);
+  }
+
   /** This extracts the RPC span encoded in the custom payload, or starts a new trace */
   Span spanFromPayload(Tracer tracer, @Nullable Map<String, ByteBuffer> payload) {
-    ByteBuffer b3 = payload != null ? payload.get("b3") : null;
+    CharSequence b3 =
+        payload != null && payload.get("b3") != null ? UTF_8.decode(payload.get("b3")) : null;
+    logger.debug("Starting span for b3={}", b3);
     if (b3 == null) return tracer.nextSpan();
-    TraceContextOrSamplingFlags extracted = B3SingleFormat.parseB3SingleFormat(UTF_8.decode(b3));
+    TraceContextOrSamplingFlags extracted = B3SingleFormat.parseB3SingleFormat(b3);
     if (extracted == null) return tracer.nextSpan();
     return tracer.nextSpan(extracted);
   }
 
   @Override protected final void stopSessionImpl() {
-    ZipkinTraceState state = (ZipkinTraceState) get();
-    if (state != null) state.incoming.finish();
+    TraceState state = get();
+    if (state instanceof ZipkinTraceState) {
+      ((ZipkinTraceState) state).incoming.finish();
+    }
   }
 
   @Override public final TraceState begin(
       String request, InetAddress client, Map<String, String> parameters) {
-    ZipkinTraceState state = ((ZipkinTraceState) get());
-    Span span = state.incoming;
-    if (span.isNoop()) return state;
+    TraceState state = get();
+    if (state instanceof ZipkinTraceState) {
+      Span span = ((ZipkinTraceState) state).incoming;
+      if (span.isNoop()) return state;
 
-    // request name example: "Execute CQL3 prepared query"
-    parseRequest(state, request, parameters, span);
-    // observed parameter keys include page_size, consistency_level, serial_consistency_level, query
+      // request name example: "Execute CQL3 prepared query"
+      parseRequest(state, request, parameters, span);
+      // observed parameter keys include page_size, consistency_level, serial_consistency_level, query
 
-    span.remoteIpAndPort(client.getHostAddress(), 0);
-    span.start();
+      span.remoteIpAndPort(client.getHostAddress(), 0);
+      span.start();
+    }
     return state;
   }
 
@@ -139,9 +181,9 @@ public class Tracing extends org.apache.cassandra.tracing.Tracing {
     customizer.tag(CassandraTraceKeys.CASSANDRA_SESSION_ID, state.sessionId.toString());
   }
 
-  @Override protected final TraceState newTraceState(
-      InetAddress coordinator, UUID sessionId, TraceType traceType) {
-    throw new AssertionError();
+  @Override public TraceState initializeFromMessage(MessageIn<?> message) {
+    // not current tracing inter-node messages
+    return null;
   }
 
   @Override public final void trace(ByteBuffer sessionId, String message, int ttl) {

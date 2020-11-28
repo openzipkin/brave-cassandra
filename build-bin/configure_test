@@ -6,7 +6,6 @@ set -ue
 # should be done in `configure_deploy`.
 #
 # See [README.md] for an explanation of this and how CI should use it.
-
 build-bin/maven/maven_go_offline
 
 # Ensure testcontainers are configured properly
