@@ -92,8 +92,8 @@ public class TracingSession extends AbstractSession {
     if (span.isNoop()) return result; // don't add callback on noop
     Futures.addCallback(result, new FutureCallback<ResultSet>() {
       @Override public void onSuccess(ResultSet result) {
-        InetSocketAddress host = result.getExecutionInfo().getQueriedHost().getSocketAddress();
-        span.remoteIpAndPort(host.getHostString(), host.getPort());
+        InetSocketAddress host = result.getExecutionInfo().getQueriedHost().getEndPoint().resolve();
+        span.remoteIpAndPort(host.getAddress().getHostAddress(), host.getPort());
         span.remoteServiceName(remoteServiceName);
         parser.response(result, span);
         span.finish();

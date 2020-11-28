@@ -84,30 +84,38 @@
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 
     <main.basedir>${project.basedir}</main.basedir>
+
+    <!-- default bytecode version for src/main -->
+    <main.java.version>1.8</main.java.version>
     <main.signature.artifact>java18</main.signature.artifact>
 
     <cassandra-driver-core.version>3.10.2</cassandra-driver-core.version>
-    <brave.version>5.13.1</brave.version>
+    <brave.version>5.13.2</brave.version>
 
     <junit.version>4.13.1</junit.version>
     <junit-jupiter.version>5.7.0</junit-jupiter.version>
-    <assertj.version>3.18.0</assertj.version>
+    <assertj.version>3.18.1</assertj.version>
+    <testcontainers.version>1.15.0</testcontainers.version>
 
     <!-- override to set exclusions per-project -->
     <errorprone.args />
     <errorprone.version>2.4.0</errorprone.version>
     <log4j.version>2.14.0</log4j.version>
 
+    <license.skip>${skipTests}</license.skip>
+
     <animal-sniffer-maven-plugin.version>1.19</animal-sniffer-maven-plugin.version>
     <go-offline-maven-plugin.version>1.2.7</go-offline-maven-plugin.version>
     <!-- TODO: cleanup any redundant ignores now also in the 4.0 release (once final) -->
     <license-maven-plugin.version>4.0.rc2</license-maven-plugin.version>
+    <maven-bundle-plugin.version>5.1.1</maven-bundle-plugin.version>
     <maven-compiler-plugin.version>3.8.1</maven-compiler-plugin.version>
     <maven-install-plugin.version>3.0.0-M1</maven-install-plugin.version>
     <!-- Use same version as https://github.com/openzipkin/docker-java -->
     <maven-dependency-plugin.version>3.1.2</maven-dependency-plugin.version>
     <maven-deploy-plugin.version>3.0.0-M1</maven-deploy-plugin.version>
     <maven-release-plugin.version>3.0.0-M1</maven-release-plugin.version>
+    <maven-shade-plugin.version>3.2.4</maven-shade-plugin.version>
     <maven-source-plugin.version>3.2.1</maven-source-plugin.version>
     <maven-javadoc-plugin.version>3.2.0</maven-javadoc-plugin.version>
     <maven-jar-plugin.version>3.2.0</maven-jar-plugin.version>
@@ -121,10 +129,7 @@
       <dependency>
         <groupId>org.apache.cassandra</groupId>
         <artifactId>cassandra-all</artifactId>
-        <!-- Avoid classpath problems, which go away if we switch to testcontainers to run Cassandra
-              * 3.11.9 - needs sun.misc
-              * 3.11.[567] - Missing protocol version limiter -->
-        <version>3.11.4</version>
+        <version>3.11.9</version>
         <exclusions>
           <exclusion>
             <groupId>org.slf4j</groupId>
@@ -136,11 +141,13 @@
           </exclusion>
         </exclusions>
       </dependency>
-      <!-- Override until Cassandra 4.0 per CASSANDRA-9608 -->
+      <!-- testcontainers 1.15+ no longer shades docker-java. This means conflicts with jackson. -->
       <dependency>
-        <groupId>com.github.jbellis</groupId>
-        <artifactId>jamm</artifactId>
-        <version>0.3.3</version>
+        <groupId>com.fasterxml.jackson</groupId>
+        <artifactId>jackson-bom</artifactId>
+        <version>2.11.3</version>
+        <type>pom</type>
+        <scope>import</scope>
       </dependency>
     </dependencies>
   </dependencyManagement>
@@ -155,15 +162,38 @@
       <version>${brave.version}</version>
     </dependency>
 
+
     <dependency>
-      <groupId>io.zipkin.brave</groupId>
-      <artifactId>brave-tests</artifactId>
-      <version>${brave.version}</version>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <version>${junit.version}</version>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>${junit-jupiter.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.vintage</groupId>
+      <artifactId>junit-vintage-engine</artifactId>
+      <version>${junit-jupiter.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <!-- Current versions of JUnit5 provide the above junit-jupiter artifact for convenience, but we
+         may still have transitive dependencies on these older artifacts and have to make sure
+         they're all using the same version. -->
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter-api</artifactId>
+      <version>${junit-jupiter.version}</version>
       <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.junit.jupiter</groupId>
-      <artifactId>junit-jupiter</artifactId>
+      <artifactId>junit-jupiter-engine</artifactId>
       <version>${junit-jupiter.version}</version>
       <scope>test</scope>
     </dependency>
@@ -217,6 +247,13 @@
           <configuration>
             <!-- Add dependencies indirectly referenced by build plugins -->
             <dynamicDependencies>
+              <!-- animal sniffer implicitly uses this -->
+              <DynamicDependency>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <version>${maven-dependency-plugin.version}</version>
+                <repositoryType>PLUGIN</repositoryType>
+              </DynamicDependency>
               <DynamicDependency>
                 <groupId>org.codehaus.mojo.signature</groupId>
                 <artifactId>${main.signature.artifact}</artifactId>
@@ -246,7 +283,18 @@
           </configuration>
         </plugin>
 
-        <!-- maven-dependency-plugin:get should use a recent version. -->
+        <plugin>
+          <artifactId>maven-compiler-plugin</artifactId>
+          <version>${maven-compiler-plugin.version}</version>
+          <inherited>true</inherited>
+          <configuration>
+            <source>${main.java.version}</source>
+            <target>${main.java.version}</target>
+            <fork>true</fork>
+            <showWarnings>true</showWarnings>
+          </configuration>
+        </plugin>
+
         <plugin>
           <artifactId>maven-dependency-plugin</artifactId>
           <version>${maven-dependency-plugin.version}</version>
@@ -290,25 +338,75 @@
           <artifactId>nexus-staging-maven-plugin</artifactId>
           <version>${nexus-staging-maven-plugin.version}</version>
         </plugin>
+
+        <plugin>
+          <groupId>org.eclipse.m2e</groupId>
+          <artifactId>lifecycle-mapping</artifactId>
+          <version>1.0.0</version>
+          <configuration>
+            <lifecycleMappingMetadata>
+              <pluginExecutions>
+                <pluginExecution>
+                  <pluginExecutionFilter>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <versionRange>[3.7,)</versionRange>
+                    <goals>
+                      <goal>compile</goal>
+                      <goal>testCompile</goal>
+                    </goals>
+                  </pluginExecutionFilter>
+                  <action>
+                    <configurator>
+                      <id>org.eclipse.m2e.jdt.javaConfigurator</id>
+                    </configurator>
+                  </action>
+                </pluginExecution>
+              </pluginExecutions>
+            </lifecycleMappingMetadata>
+          </configuration>
+        </plugin>
+        <plugin>
+          <artifactId>maven-eclipse-plugin</artifactId>
+          <version>2.10</version>
+          <configuration>
+            <downloadSources>true</downloadSources>
+            <downloadJavadocs>true</downloadJavadocs>
+          </configuration>
+        </plugin>
+
+        <plugin>
+          <artifactId>maven-shade-plugin</artifactId>
+          <version>${maven-shade-plugin.version}</version>
+        </plugin>
+
+        <plugin>
+          <artifactId>maven-remote-resources-plugin</artifactId>
+          <version>1.7.0</version>
+        </plugin>
       </plugins>
     </pluginManagement>
 
     <plugins>
       <plugin>
-        <artifactId>maven-compiler-plugin</artifactId>
-        <version>${maven-compiler-plugin.version}</version>
-        <inherited>true</inherited>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>animal-sniffer-maven-plugin</artifactId>
+        <version>${animal-sniffer-maven-plugin.version}</version>
         <configuration>
-          <source>1.8</source>
-          <target>1.8</target>
-          <fork>true</fork>
-          <showWarnings>true</showWarnings>
+          <signature>
+            <groupId>org.codehaus.mojo.signature</groupId>
+            <artifactId>${main.signature.artifact}</artifactId>
+            <version>1.0</version>
+          </signature>
+          <checkTestClasses>false</checkTestClasses>
         </configuration>
-      </plugin>
-
-      <plugin>
-        <artifactId>maven-remote-resources-plugin</artifactId>
-        <version>1.7.0</version>
+        <executions>
+          <execution>
+            <goals>
+              <goal>check</goal>
+            </goals>
+          </execution>
+        </executions>
       </plugin>
 
       <plugin>
@@ -324,22 +422,10 @@
           </classpathDependencyExcludes>
         </configuration>
       </plugin>
+
       <plugin>
         <artifactId>maven-failsafe-plugin</artifactId>
         <version>${maven-surefire-plugin.version}</version>
-        <configuration>
-          <!-- Try to prevent flakes in CI -->
-          <reuseForks>false</reuseForks>
-          <!-- workaround to SUREFIRE-1831 -->
-          <useModulePath>false</useModulePath>
-          <!-- Brave and OkHttp MockWebServer log with java.util.logging. Adding the bridge allows
-               allows us to change scope and format via log4j2.properties -->
-          <systemPropertyVariables>
-            <java.util.logging.manager>org.apache.logging.log4j.jul.LogManager</java.util.logging.manager>
-          </systemPropertyVariables>
-          <!-- Ensure scope leak cause ends up in the console -->
-          <trimStackTrace>false</trimStackTrace>
-        </configuration>
         <executions>
           <execution>
             <id>integration-test</id>
@@ -350,29 +436,21 @@
             </goals>
           </execution>
         </executions>
-      </plugin>
-
-      <!-- Ensure no Java 9+ api usage -->
-      <plugin>
-        <groupId>org.codehaus.mojo</groupId>
-        <artifactId>animal-sniffer-maven-plugin</artifactId>
-        <version>${animal-sniffer-maven-plugin.version}</version>
         <configuration>
-          <checkTestClasses>false</checkTestClasses>
-          <skip>${skipTests}</skip>
-          <signature>
-            <groupId>org.codehaus.mojo.signature</groupId>
-            <artifactId>${main.signature.artifact}</artifactId>
-            <version>1.0</version>
-          </signature>
+          <!-- Try to prevent flakes in CI -->
+          <reuseForks>false</reuseForks>
+          <!-- workaround to SUREFIRE-1831 -->
+          <useModulePath>false</useModulePath>
+          <!-- Brave and OkHttp MockWebServer log with java.util.logging. Adding the bridge allows
+               allows us to change scope and format via log4j2.properties -->
+          <systemPropertyVariables>
+            <java.util.logging.manager>org.apache.logging.log4j.jul.LogManager</java.util.logging.manager>
+          </systemPropertyVariables>
+          <!-- Corrupted STDOUT by directly writing to native stream in forked JVM SUREFIRE-1614 -->
+          <forkNode implementation="org.apache.maven.plugin.surefire.extensions.SurefireForkNodeFactory" />
+          <!-- Ensure scope leak cause ends up in the console -->
+          <trimStackTrace>false</trimStackTrace>
         </configuration>
-        <executions>
-          <execution>
-            <goals>
-              <goal>check</goal>
-            </goals>
-          </execution>
-        </executions>
       </plugin>
 
       <plugin>
@@ -400,46 +478,43 @@
         <artifactId>license-maven-plugin</artifactId>
         <version>${license-maven-plugin.version}</version>
         <configuration>
-          <skip>${skipTests}</skip>
+          <skip>${license.skip}</skip>
+          <!-- session.executionRootDirectory resolves properly even with nested modules -->
           <header>${main.basedir}/src/etc/header.txt</header>
           <mapping>
             <!-- Don't use javadoc style as this makes code formatters break it by adding tags! -->
             <java>SLASHSTAR_STYLE</java>
+            <bnd>SCRIPT_STYLE</bnd>
             <!-- build-bin/docker -->
-            <block_on_health>SCRIPT_STYLE</block_on_health>
             <configure_docker>SCRIPT_STYLE</configure_docker>
-            <configure_docker_push>SCRIPT_STYLE</configure_docker_push>
-            <docker_arch>SCRIPT_STYLE</docker_arch>
-            <docker_args>SCRIPT_STYLE</docker_args>
-            <docker_build>SCRIPT_STYLE</docker_build>
-            <docker_push>SCRIPT_STYLE</docker_push>
             <!-- build-bin/git -->
             <login_git>SCRIPT_STYLE</login_git>
             <version_from_trigger_tag>SCRIPT_STYLE</version_from_trigger_tag>
             <!-- build-bin/gpg -->
             <configure_gpg>SCRIPT_STYLE</configure_gpg>
             <!-- build-bin/maven -->
-            <maven_build_or_unjar>SCRIPT_STYLE</maven_build_or_unjar>
             <maven_deploy>SCRIPT_STYLE</maven_deploy>
             <maven_go_offline>SCRIPT_STYLE</maven_go_offline>
+            <maven_opts>SCRIPT_STYLE</maven_opts>
             <maven_release>SCRIPT_STYLE</maven_release>
-            <maven_unjar>SCRIPT_STYLE</maven_unjar>
           </mapping>
           <excludes>
-            <exclude>.docker.env</exclude>
-            <exclude>.gitignore</exclude>
+            <exclude>**/log4j2.properties</exclude>
             <exclude>.editorconfig</exclude>
+            <exclude>.gitattributes</exclude>
+            <exclude>.gitignore</exclude>
+            <exclude>.mailmap</exclude>
             <exclude>.mvn/**</exclude>
             <exclude>mvnw*</exclude>
             <exclude>etc/header.txt</exclude>
             <exclude>**/.idea/**</exclude>
+            <exclude>**/.editorconfig</exclude>
             <exclude>LICENSE</exclude>
+            <exclude>NOTICE</exclude>
             <exclude>**/*.md</exclude>
+            <exclude>**/*.bnd</exclude>
             <exclude>src/test/resources/**</exclude>
-            <exclude>src/main/resources/**</exclude>
-            <exclude>**/*.puml</exclude>
-            <exclude>Makefile</exclude>
-            <exclude>.dockerignore</exclude>
+            <exclude>.github/**</exclude>
             <exclude>build-bin/*</exclude>
           </excludes>
           <strictCheck>true</strictCheck>
@@ -486,6 +561,14 @@
         <plugins>
           <plugin>
             <artifactId>maven-compiler-plugin</artifactId>
+            <version>${maven-compiler-plugin.version}</version>
+            <inherited>true</inherited>
+            <configuration>
+              <source>${main.java.version}</source>
+              <target>${main.java.version}</target>
+              <fork>true</fork>
+              <showWarnings>true</showWarnings>
+            </configuration>
             <executions>
               <execution>
                 <!-- only use errorprone on main source tree -->
@@ -534,7 +617,6 @@
           </plugin>
 
           <plugin>
-            <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-gpg-plugin</artifactId>
             <version>1.6</version>
             <executions>
@@ -591,6 +673,63 @@
                   <goal>jar</goal>
                 </goals>
                 <phase>package</phase>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+
+    <profile>
+      <id>module-info</id>
+      <!-- Build profiles can only consider static properties, such as files or ENV variables.
+           To conditionally add module information, we use existence of bnd.bnd. This allows
+           irrelevant packages such as tests and benchmarks to quietly opt-out.
+           http://maven.apache.org/guides/introduction/introduction-to-profiles.html -->
+      <activation>
+        <file>
+          <exists>bnd.bnd</exists>
+        </file>
+      </activation>
+      <build>
+        <plugins>
+          <!-- OSGi and Java Modules configuration -->
+          <plugin>
+            <groupId>org.apache.felix</groupId>
+            <artifactId>maven-bundle-plugin</artifactId>
+            <version>${maven-bundle-plugin.version}</version>
+            <configuration>
+              <obrRepository>NONE</obrRepository>
+              <instructions>
+                <_include>-bnd.bnd</_include>
+              </instructions>
+            </configuration>
+            <executions>
+              <execution>
+                <phase>process-classes</phase>
+                <goals>
+                  <goal>manifest</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <artifactId>maven-jar-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>default-jar</id>
+                <configuration>
+                  <archive>
+                    <!-- Include the MANIFEST.MF maven-bundle-plugin generates from bnd.bnd -->
+                    <manifestFile>${project.build.outputDirectory}/META-INF/MANIFEST.MF</manifestFile>
+                    <manifestEntries>
+                      <Automatic-Module-Name>${module.name}</Automatic-Module-Name>
+                    </manifestEntries>
+                  </archive>
+                </configuration>
+                <goals>
+                  <goal>jar</goal>
+                </goals>
               </execution>
             </executions>
           </plugin>

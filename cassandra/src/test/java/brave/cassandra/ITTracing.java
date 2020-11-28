@@ -13,40 +13,69 @@
  */
 package brave.cassandra;
 
-import brave.cassandra.driver.CassandraClientTracing;
-import brave.cassandra.driver.TracingSession;
-import brave.propagation.CurrentTraceContext.Scope;
+import brave.handler.SpanHandler;
+import brave.propagation.TraceContext;
 import brave.test.ITRemote;
-import cassandra.CassandraRule;
+import cassandra.CassandraContainer;
+import cassandra.ForwardHttpSpansToHandler;
+import cassandra.ForwardingSpanHandler;
 import com.datastax.driver.core.BoundStatement;
 import com.datastax.driver.core.Cluster;
 import com.datastax.driver.core.Session;
-import com.datastax.driver.core.Statement;
+import java.io.File;
+import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.function.Function;
+import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
+import org.junit.rules.DisableOnDebug;
+import org.junit.rules.Timeout;
+import org.testcontainers.Testcontainers;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.utility.MountableFile;
+import zipkin2.reporter.Reporter;
+import zipkin2.reporter.brave.ZipkinSpanHandler;
+import zipkin2.reporter.urlconnection.URLConnectionSender;
 
-import static brave.Span.Kind.CLIENT;
 import static brave.Span.Kind.SERVER;
-import static brave.propagation.SamplingFlags.NOT_SAMPLED;
+import static brave.propagation.B3SingleFormat.writeB3SingleFormatAsBytes;
+import static brave.propagation.SamplingFlags.SAMPLED;
+import static java.util.Collections.singletonMap;
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class ITTracing extends ITRemote {
-  static {
-    System.setProperty("cassandra.custom_tracing_class", Tracing.class.getName());
+  // swap references on each method instead of starting Cassandra for each test
+  static SpanHandler currentSpanHandler = SpanHandler.NOOP;
+
+  @Before public void setCurrentSpanHandler() {
+    currentSpanHandler = testSpanHandler;
   }
 
-  @ClassRule public static CassandraRule cassandra = new CassandraRule();
+  @ClassRule public static ForwardHttpSpansToHandler zipkin =
+      new ForwardHttpSpansToHandler(new ForwardingSpanHandler() {
+        @Override protected SpanHandler delegate() {
+          return currentSpanHandler;
+        }
+      });
+
+  @ClassRule public static CassandraContainer cassandra = copyTracingLibs(new CassandraContainer()
+      .withEnv("LOGGING_LEVEL", "WARN")
+      .withEnv("JAVA_OPTS", javaOpts(zipkin.httpPort()))
+  );
+
+  public ITTracing() {
+    globalTimeout = new DisableOnDebug(Timeout.seconds(120)); // Cassandra takes longer than 20s
+  }
 
   @Test public void doesntTraceWhenTracingDisabled() {
-    execute(session -> session.prepare("SELECT * from system.schema_keyspaces").bind());
+    execute(session -> session.prepare("SELECT release_version from system.local").bind());
   }
 
   @Test public void startsNewTraceWhenTracingEnabled() {
     execute(session -> session
-        .prepare("SELECT * from system.schema_keyspaces")
+        .prepare("SELECT release_version from system.local")
         .enableTracing()
         .setOutgoingPayload(new LinkedHashMap<>())
         .bind());
@@ -56,45 +85,50 @@ public class ITTracing extends ITRemote {
 
   @Test public void startsNewTraceWhenTracingEnabled_noPayload() {
     execute(session -> session
-        .prepare("SELECT * from system.schema_keyspaces").enableTracing().bind());
+        .prepare("SELECT release_version from system.local").enableTracing().bind());
 
     testSpanHandler.takeRemoteSpan(SERVER);
   }
 
   @Test public void samplingDisabled() {
-    try (Scope unsampled = currentTraceContext.newScope(newTraceContext(NOT_SAMPLED))) {
-      executeTraced(session -> session.prepare("SELECT * from system.schema_keyspaces").bind());
-    }
+    execute(session -> session
+        .prepare("SELECT release_version from system.local")
+        .setOutgoingPayload(singletonMap("b3", ByteBuffer.wrap(new byte[] {'0'})))
+        .bind());
 
     // test rule ensures no span was sampled
   }
 
   @Test public void usesExistingTraceId() {
-    executeTraced(session -> session
-        .prepare("SELECT * from system.schema_keyspaces").bind());
+    TraceContext context = newTraceContext(SAMPLED);
+    execute(session -> session
+        .prepare("SELECT release_version from system.local")
+        .enableTracing()
+        .setOutgoingPayload(
+            singletonMap("b3", ByteBuffer.wrap(writeB3SingleFormatAsBytes(context))))
+        .bind());
 
-    testSpanHandler.takeRemoteSpan(SERVER);
-    testSpanHandler.takeRemoteSpan(CLIENT);
+    assertChildOf(testSpanHandler.takeRemoteSpan(SERVER), context);
   }
 
   @Test public void reportsServerKindToZipkin() {
     execute(session -> session
-        .prepare("SELECT * from system.schema_keyspaces").enableTracing().bind());
+        .prepare("SELECT release_version from system.local").enableTracing().bind());
 
     testSpanHandler.takeRemoteSpan(SERVER);
   }
 
   @Test public void defaultSpanNameIsType() {
     execute(session -> session
-        .prepare("SELECT * from system.schema_keyspaces").enableTracing().bind());
+        .prepare("SELECT release_version from system.local").enableTracing().bind());
 
     assertThat(testSpanHandler.takeRemoteSpan(SERVER).name())
-        .isEqualTo("QUERY");
+        .isEqualTo("query");
   }
 
   @Test public void defaultRequestTags() {
     execute(session -> session
-        .prepare("SELECT * from system.schema_keyspaces").enableTracing().bind());
+        .prepare("SELECT release_version from system.local").enableTracing().bind());
 
     assertThat(testSpanHandler.takeRemoteSpan(SERVER).tags())
         .containsOnlyKeys("cassandra.request", "cassandra.session_id");
@@ -102,7 +136,7 @@ public class ITTracing extends ITRemote {
 
   @Test public void reportsClientAddress() {
     execute(session -> session
-        .prepare("SELECT * from system.schema_keyspaces").enableTracing().bind());
+        .prepare("SELECT release_version from system.local").enableTracing().bind());
 
     assertThat(testSpanHandler.takeRemoteSpan(SERVER).remoteIp())
         .isNotNull();
@@ -116,13 +150,53 @@ public class ITTracing extends ITRemote {
     }
   }
 
-  void executeTraced(Function<Session, Statement> statement) {
-    CassandraClientTracing withPropagation = CassandraClientTracing.newBuilder(tracing)
-        .propagationEnabled(true).build();
-    try (Cluster cluster = Cluster.builder()
-        .addContactPointsWithPorts(Collections.singleton(cassandra.contactPoint()))
-        .build(); Session session = TracingSession.create(withPropagation, cluster.connect())) {
-      session.execute(statement.apply(session));
+  static <C extends GenericContainer<C>> C copyTracingLibs(C container) {
+    // First detect if we are in an IDE or failsafe. The latter will see our shaded jar.
+    String tracingPath =
+        Tracing.class.getProtectionDomain().getCodeSource().getLocation().getFile();
+    if (tracingPath.contains("brave-instrumentation-cassandra")) {
+      if (!tracingPath.endsWith("-all.jar")) { // then switch to it
+        tracingPath = tracingPath.replace(".jar", "-all.jar");
+      }
+      if (!new File(tracingPath).exists()) {
+        throw new AssertionError(tracingPath + " missing. Check maven-shade-plugin configuration");
+      }
+      MountableFile allJar = MountableFile.forHostPath(tracingPath);
+      return container.withCopyFileToContainer(allJar,
+          "/cassandra/lib/brave-instrumentation-cassandra-all.jar");
     }
+
+    // Otherwise, we need references to our main classpath in Cassandra's classpath
+    return container
+        .withCopyFileToContainer(codeSource(Tracing.class), "/cassandra/classes/")
+        .withCopyFileToContainer(codeSource(brave.Tracing.class), "/cassandra/lib/brave.jar")
+        .withCopyFileToContainer(codeSource(ZipkinSpanHandler.class),
+            "/cassandra/lib/zipkin-reporter-brave.jar")
+        .withCopyFileToContainer(codeSource(URLConnectionSender.class),
+            "/cassandra/lib/zipkin-sender-urlconnection.jar")
+        .withCopyFileToContainer(codeSource(Reporter.class), "/cassandra/lib/zipkin-reporter.jar")
+        .withCopyFileToContainer(codeSource(zipkin2.Span.class), "/cassandra/lib/zipkin.jar");
+  }
+
+  /** Returns a mountable file to a path that's usually a jar in the Maven local repo. */
+  static MountableFile codeSource(Class<?> clazz) {
+    return MountableFile.forHostPath(
+        clazz.getProtectionDomain().getCodeSource().getLocation().getFile());
+  }
+
+  /** Overwrite JAVA_OPTS to enable tracing and point it at the test Zipkin endpoint */
+  static String javaOpts(int zipkinHttpPort) {
+    // TODO: would be nicer if Testcontainers.exposeHostPort(int) and returned the input
+    // https://github.com/testcontainers/testcontainers-java/issues/3538
+    Testcontainers.exposeHostPorts(zipkinHttpPort);
+    String zipkinEndpoint =
+        "http://host.testcontainers.internal:" + zipkinHttpPort + "/api/v2/spans";
+
+    // We could read JAVA_OPTS from the image with DockerClient.inspectImageCmd, but that is a cure
+    // worse than the disease. It implies ensuring the image is pulled which can instantiate Docker
+    // when we intentionally skipped it via "docker.skip". Instead, we copy/paste.
+    return "-Xms256m -Xmx256m -XX:+ExitOnOutOfMemoryError -Djava.net.preferIPv4Stack=true"
+        + " -Dcassandra.custom_tracing_class=" + Tracing.class.getName()
+        + " -Dzipkin.fail_fast=true" + " -Dzipkin.http_endpoint=" + zipkinEndpoint;
   }
 }
