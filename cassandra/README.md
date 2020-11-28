@@ -32,13 +32,14 @@ cassandra's lib directory and start cassandra with java options like this:
 $ JVM_OPTS='-Dzipkin.http_endpoint=http://localhost:9411/api/v2/spans -Dcassandra.custom_tracing_class=brave.cassandra.Tracing' cassandra
 ```
 
-Note this jar is about 200KiB and does not include any classes besides
+Note this jar is about 420KiB and does not include any classes besides
 Brave and Zipkin. It has limited configuration to the below:
 
 System property | Default | Description
 --- | --- | ---
 zipkin.http_endpoint | none | The url to Zipkin's POST endpoint. Ex. http://myhost:9411/api/v2/spans
 zipkin.service_name | cassandra | The name that shows up in Zipkin's search and dependency graph
+zipkin.fail_fast | false | Exits Cassandra upon an initial error connecting to the HTTP endpoint
 
 ## Custom Integration
 
