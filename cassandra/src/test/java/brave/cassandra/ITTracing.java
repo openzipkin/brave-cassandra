@@ -27,15 +27,13 @@ import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.function.Function;
-import org.jetbrains.annotations.NotNull;
 import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.rules.DisableOnDebug;
 import org.junit.rules.Timeout;
 import org.testcontainers.Testcontainers;
-import org.testcontainers.images.RemoteDockerImage;
-import org.testcontainers.images.builder.ImageFromDockerfile;
+import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.utility.MountableFile;
 import zipkin2.reporter.Reporter;
 import zipkin2.reporter.brave.ZipkinSpanHandler;
@@ -48,9 +46,6 @@ import static java.util.Collections.singletonMap;
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class ITTracing extends ITRemote {
-  /** Builds a Cassandra image that adds {@link Tracing} and its dependencies in the classpath. */
-  static RemoteDockerImage imageWithBraveTracer = new RemoteDockerImage(imageWithBraveTracer());
-
   // swap references on each method instead of starting Cassandra for each test
   static SpanHandler currentSpanHandler = SpanHandler.NOOP;
 
@@ -64,10 +59,11 @@ public class ITTracing extends ITRemote {
           return currentSpanHandler;
         }
       });
-  @ClassRule public static CassandraContainer cassandra =
-      new CassandraContainer(imageWithBraveTracer)
-          .withEnv("LOGGING_LEVEL", "WARN")
-          .withEnv("JAVA_OPTS", javaOpts(zipkin.httpPort()));
+
+  @ClassRule public static CassandraContainer cassandra = copyTracingLibs(new CassandraContainer()
+      .withEnv("LOGGING_LEVEL", "WARN")
+      .withEnv("JAVA_OPTS", javaOpts(zipkin.httpPort()))
+  );
 
   public ITTracing() {
     globalTimeout = new DisableOnDebug(Timeout.seconds(120)); // Cassandra takes longer than 20s
@@ -154,8 +150,7 @@ public class ITTracing extends ITRemote {
     }
   }
 
-  static ImageFromDockerfile imageWithBraveTracer() {
-    ImageFromDockerfile image = new ImageFromDockerfile("openzipkin/brave-cassandra:test");
+  static <C extends GenericContainer<C>> C copyTracingLibs(C container) {
     // First detect if we are in an IDE or failsafe. The latter will see our shaded jar.
     String tracingPath =
         Tracing.class.getProtectionDomain().getCodeSource().getLocation().getFile();
@@ -167,43 +162,30 @@ public class ITTracing extends ITRemote {
         throw new AssertionError(tracingPath + " missing. Check maven-shade-plugin configuration");
       }
       MountableFile allJar = MountableFile.forHostPath(tracingPath);
-      return image
-          .withFileFromTransferable("brave-instrumentation-cassandra-all.jar", allJar)
-          .withDockerfileFromBuilder(
-              builder -> builder.from(CassandraContainer.IMAGE_NAME.asCanonicalNameString())
-                  .add("brave-instrumentation-cassandra-all.jar",
-                      "lib/brave-instrumentation-cassandra-all.jar")
-          );
+      return container.withCopyFileToContainer(allJar,
+          "/cassandra/lib/brave-instrumentation-cassandra-all.jar");
     }
 
     // Otherwise, we need references to our main classpath in Cassandra's classpath
-    return image
-        .withFileFromTransferable("classes", codeSource(Tracing.class))
-        .withFileFromTransferable("brave.jar", codeSource(brave.Tracing.class))
-        .withFileFromTransferable("zipkin-reporter-brave.jar", codeSource(ZipkinSpanHandler.class))
-        .withFileFromTransferable("zipkin-sender-urlconnection.jar",
-            codeSource(URLConnectionSender.class))
-        .withFileFromTransferable("zipkin-reporter.jar", codeSource(Reporter.class))
-        .withFileFromTransferable("zipkin.jar", codeSource(zipkin2.Span.class))
-        .withDockerfileFromBuilder(
-            builder -> builder.from(CassandraContainer.IMAGE_NAME.asCanonicalNameString())
-                // Copy the above references to a new layer over Zipkin's Cassandra image
-                .add("classes/", "classes/")
-                .add("brave.jar", "lib/brave.jar")
-                .add("zipkin-reporter-brave.jar", "lib/zipkin-reporter-brave.jar")
-                .add("zipkin-sender-urlconnection.jar", "lib/zipkin-sender-urlconnection.jar")
-                .add("zipkin-reporter.jar", "lib/zipkin-reporter.jar")
-                .add("zipkin.jar", "lib/zipkin.jar")
-        );
+    return container
+        .withCopyFileToContainer(codeSource(Tracing.class), "/cassandra/classes/")
+        .withCopyFileToContainer(codeSource(brave.Tracing.class), "/cassandra/lib/brave.jar")
+        .withCopyFileToContainer(codeSource(ZipkinSpanHandler.class),
+            "/cassandra/lib/zipkin-reporter-brave.jar")
+        .withCopyFileToContainer(codeSource(URLConnectionSender.class),
+            "/cassandra/lib/zipkin-sender-urlconnection.jar")
+        .withCopyFileToContainer(codeSource(Reporter.class), "/cassandra/lib/zipkin-reporter.jar")
+        .withCopyFileToContainer(codeSource(zipkin2.Span.class), "/cassandra/lib/zipkin.jar");
   }
 
+  /** Returns a mountable file to a path that's usually a jar in the Maven local repo. */
   static MountableFile codeSource(Class<?> clazz) {
     return MountableFile.forHostPath(
         clazz.getProtectionDomain().getCodeSource().getLocation().getFile());
   }
 
   /** Overwrite JAVA_OPTS to enable tracing and point it at the test Zipkin endpoint */
-  @NotNull private static String javaOpts(int zipkinHttpPort) {
+  static String javaOpts(int zipkinHttpPort) {
     // TODO: would be nicer if Testcontainers.exposeHostPort(int) and returned the input
     // https://github.com/testcontainers/testcontainers-java/issues/3538
     Testcontainers.exposeHostPorts(zipkinHttpPort);
