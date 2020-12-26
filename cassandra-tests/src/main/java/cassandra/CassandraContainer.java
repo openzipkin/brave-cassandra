@@ -26,7 +26,7 @@ import static org.testcontainers.utility.DockerImageName.parse;
 // mostly waiting for https://github.com/testcontainers/testcontainers-java/issues/3537
 public class CassandraContainer extends GenericContainer<CassandraContainer> {
   public CassandraContainer() {
-    super(parse("ghcr.io/openzipkin/zipkin-cassandra:2.23.0"));
+    super(parse("ghcr.io/openzipkin/zipkin-cassandra:2.23.2"));
     if ("true".equals(System.getProperty("docker.skip"))) {
       throw new AssumptionViolatedException("${docker.skip} == true");
     }
