@@ -25,7 +25,7 @@ import static org.testcontainers.utility.DockerImageName.parse;
 
 public class CassandraContainer extends GenericContainer<CassandraContainer> {
   public CassandraContainer() {
-    super(parse("ghcr.io/openzipkin/zipkin-cassandra:2.23.7"));
+    super(parse("ghcr.io/openzipkin/zipkin-cassandra:2.27.0"));
     waitStrategy = Wait.forHealthcheck();
     addExposedPort(9042);
     withStartupTimeout(Duration.ofMinutes(2));
