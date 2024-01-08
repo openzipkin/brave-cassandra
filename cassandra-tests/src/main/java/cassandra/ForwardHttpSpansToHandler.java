@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2020 The OpenZipkin Authors
+ * Copyright 2017-2024 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -24,9 +24,9 @@ import okhttp3.mockwebserver.MockWebServer;
 import okhttp3.mockwebserver.RecordedRequest;
 import okio.Buffer;
 import okio.GzipSource;
-import org.junit.rules.TestRule;
-import org.junit.runner.Description;
-import org.junit.runners.model.Statement;
+import org.junit.jupiter.api.extension.AfterAllCallback;
+import org.junit.jupiter.api.extension.BeforeAllCallback;
+import org.junit.jupiter.api.extension.ExtensionContext;
 import zipkin2.Annotation;
 import zipkin2.Span;
 import zipkin2.codec.SpanBytesDecoder;
@@ -37,7 +37,7 @@ import zipkin2.codec.SpanBytesDecoder;
  * instrumentation that do not expose {@link SpanHandler} or run in Docker.
  */
 // Temporary until moved into brave-tests.
-public class ForwardHttpSpansToHandler implements TestRule {
+public class ForwardHttpSpansToHandler implements BeforeAllCallback, AfterAllCallback {
   final MockWebServer zipkin = new MockWebServer();
 
   /**
@@ -62,8 +62,12 @@ public class ForwardHttpSpansToHandler implements TestRule {
     zipkin.setDispatcher(new ZipkinDispatcher(spanHandler));
   }
 
-  @Override public Statement apply(Statement base, Description description) {
-    return zipkin.apply(base, description);
+  @Override public void afterAll(ExtensionContext extensionContext) throws Exception {
+    zipkin.start();
+  }
+
+  @Override public void beforeAll(ExtensionContext extensionContext) throws Exception {
+    zipkin.shutdown();
   }
 
   static final class ZipkinDispatcher extends Dispatcher {
