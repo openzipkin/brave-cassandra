@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2020 The OpenZipkin Authors
+ * Copyright 2017-2024 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -27,8 +27,8 @@ import org.apache.cassandra.net.MessageIn;
 import org.apache.cassandra.tracing.TraceState;
 import org.apache.cassandra.tracing.TraceStateImpl;
 import org.apache.cassandra.utils.FBUtilities;
-import zipkin2.Call;
-import zipkin2.CheckResult;
+import zipkin2.reporter.Call;
+import zipkin2.reporter.CheckResult;
 import zipkin2.reporter.brave.AsyncZipkinSpanHandler;
 import zipkin2.reporter.urlconnection.URLConnectionSender;
 
@@ -99,8 +99,8 @@ public class Tracing extends org.apache.cassandra.tracing.Tracing {
    * payload. If that's possible, it re-uses the trace identifiers and starts a server span.
    * Otherwise, a new trace is created.
    */
-  @Override protected final UUID newSession(
-      UUID sessionId, TraceType traceType, Map<String, ByteBuffer> customPayload) {
+  @Override protected UUID newSession(UUID sessionId, TraceType traceType,
+      Map<String, ByteBuffer> customPayload) {
     // override instead of call from super as otherwise we cannot store a reference to the span
     assert get() == null;
 
@@ -118,10 +118,10 @@ public class Tracing extends org.apache.cassandra.tracing.Tracing {
     return sessionId;
   }
 
-  @Override protected final TraceState newTraceState(
-      InetAddress coordinator, UUID sessionId, TraceType traceType) {
+  @Override
+  protected TraceState newTraceState(InetAddress inetAddress, UUID timeUUID, TraceType traceType) {
     assert false : "we don't expect this to be ever reached as we override newSession";
-    return new TraceStateImpl(coordinator, sessionId, traceType);
+    return new TraceStateImpl(coordinator, timeUUID, traceType);
   }
 
   /** This extracts the RPC span encoded in the custom payload, or starts a new trace */
@@ -193,7 +193,8 @@ public class Tracing extends org.apache.cassandra.tracing.Tracing {
   static final class ZipkinTraceState extends TraceState {
     final Span incoming;
 
-    ZipkinTraceState(InetAddress coordinator, UUID sessionId, TraceType traceType, Span incoming) {
+    ZipkinTraceState(InetAddress coordinator, UUID sessionId,
+        org.apache.cassandra.tracing.Tracing.TraceType traceType, Span incoming) {
       super(coordinator, sessionId, traceType);
       this.incoming = incoming;
     }

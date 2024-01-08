@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2020 The OpenZipkin Authors
+ * Copyright 2017-2024 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -27,12 +27,12 @@ import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.function.Function;
-import org.junit.Before;
-import org.junit.ClassRule;
-import org.junit.Test;
-import org.junit.rules.DisableOnDebug;
-import org.junit.rules.Timeout;
-import org.testcontainers.Testcontainers;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.utility.MountableFile;
 import zipkin2.reporter.Reporter;
@@ -45,35 +45,33 @@ import static brave.propagation.SamplingFlags.SAMPLED;
 import static java.util.Collections.singletonMap;
 import static org.assertj.core.api.Assertions.assertThat;
 
-public class ITTracing extends ITRemote {
+@Testcontainers(disabledWithoutDocker = true)
+@Tag("docker")
+class ITTracing extends ITRemote {
   // swap references on each method instead of starting Cassandra for each test
   static SpanHandler currentSpanHandler = SpanHandler.NOOP;
 
-  @Before public void setCurrentSpanHandler() {
+  @BeforeEach public void setCurrentSpanHandler() {
     currentSpanHandler = testSpanHandler;
   }
 
-  @ClassRule public static ForwardHttpSpansToHandler zipkin =
+  @RegisterExtension public static ForwardHttpSpansToHandler zipkin =
       new ForwardHttpSpansToHandler(new ForwardingSpanHandler() {
         @Override protected SpanHandler delegate() {
           return currentSpanHandler;
         }
       });
 
-  @ClassRule public static CassandraContainer cassandra = copyTracingLibs(new CassandraContainer()
+  @Container CassandraContainer cassandra = copyTracingLibs(new CassandraContainer()
       .withEnv("LOGGING_LEVEL", "WARN")
       .withEnv("JAVA_OPTS", javaOpts(zipkin.httpPort()))
   );
 
-  public ITTracing() {
-    globalTimeout = new DisableOnDebug(Timeout.seconds(120)); // Cassandra takes longer than 20s
-  }
-
-  @Test public void doesntTraceWhenTracingDisabled() {
+  @Test void doesntTraceWhenTracingDisabled() {
     execute(session -> session.prepare("SELECT release_version from system.local").bind());
   }
 
-  @Test public void startsNewTraceWhenTracingEnabled() {
+  @Test void startsNewTraceWhenTracingEnabled() {
     execute(session -> session
         .prepare("SELECT release_version from system.local")
         .enableTracing()
@@ -83,14 +81,14 @@ public class ITTracing extends ITRemote {
     testSpanHandler.takeRemoteSpan(SERVER);
   }
 
-  @Test public void startsNewTraceWhenTracingEnabled_noPayload() {
+  @Test void startsNewTraceWhenTracingEnabled_noPayload() {
     execute(session -> session
         .prepare("SELECT release_version from system.local").enableTracing().bind());
 
     testSpanHandler.takeRemoteSpan(SERVER);
   }
 
-  @Test public void samplingDisabled() {
+  @Test void samplingDisabled() {
     execute(session -> session
         .prepare("SELECT release_version from system.local")
         .setOutgoingPayload(singletonMap("b3", ByteBuffer.wrap(new byte[] {'0'})))
@@ -99,7 +97,7 @@ public class ITTracing extends ITRemote {
     // test rule ensures no span was sampled
   }
 
-  @Test public void usesExistingTraceId() {
+  @Test void usesExistingTraceId() {
     TraceContext context = newTraceContext(SAMPLED);
     execute(session -> session
         .prepare("SELECT release_version from system.local")
@@ -111,14 +109,14 @@ public class ITTracing extends ITRemote {
     assertChildOf(testSpanHandler.takeRemoteSpan(SERVER), context);
   }
 
-  @Test public void reportsServerKindToZipkin() {
+  @Test void reportsServerKindToZipkin() {
     execute(session -> session
         .prepare("SELECT release_version from system.local").enableTracing().bind());
 
     testSpanHandler.takeRemoteSpan(SERVER);
   }
 
-  @Test public void defaultSpanNameIsType() {
+  @Test void defaultSpanNameIsType() {
     execute(session -> session
         .prepare("SELECT release_version from system.local").enableTracing().bind());
 
@@ -126,7 +124,7 @@ public class ITTracing extends ITRemote {
         .isEqualTo("query");
   }
 
-  @Test public void defaultRequestTags() {
+  @Test void defaultRequestTags() {
     execute(session -> session
         .prepare("SELECT release_version from system.local").enableTracing().bind());
 
@@ -134,7 +132,7 @@ public class ITTracing extends ITRemote {
         .containsOnlyKeys("cassandra.request", "cassandra.session_id");
   }
 
-  @Test public void reportsClientAddress() {
+  @Test void reportsClientAddress() {
     execute(session -> session
         .prepare("SELECT release_version from system.local").enableTracing().bind());
 
@@ -188,7 +186,7 @@ public class ITTracing extends ITRemote {
   static String javaOpts(int zipkinHttpPort) {
     // TODO: would be nicer if Testcontainers.exposeHostPort(int) and returned the input
     // https://github.com/testcontainers/testcontainers-java/issues/3538
-    Testcontainers.exposeHostPorts(zipkinHttpPort);
+    org.testcontainers.Testcontainers.exposeHostPorts(zipkinHttpPort);
     String zipkinEndpoint =
         "http://host.testcontainers.internal:" + zipkinHttpPort + "/api/v2/spans";
 

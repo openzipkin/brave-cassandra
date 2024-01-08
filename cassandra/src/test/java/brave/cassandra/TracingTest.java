@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2020 The OpenZipkin Authors
+ * Copyright 2017-2024 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -17,8 +17,8 @@ import brave.propagation.StrictCurrentTraceContext;
 import brave.test.TestSpanHandler;
 import java.nio.ByteBuffer;
 import java.util.Collections;
-import org.junit.After;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -29,22 +29,22 @@ public class TracingTest {
       .currentTraceContext(currentTraceContext).addSpanHandler(spans).build();
   Tracing cassandraTracing = new Tracing(tracing);
 
-  @After public void tearDown() {
+  @AfterEach public void tearDown() {
     tracing.close();
     currentTraceContext.close();
   }
 
-  @Test public void spanFromPayload_startsTraceOnNullPayload() {
+  @Test void spanFromPayload_startsTraceOnNullPayload() {
     assertThat(cassandraTracing.spanFromPayload(tracing.tracer(), null))
         .isNotNull();
   }
 
-  @Test public void spanFromPayload_startsTraceOnAbsentB3SingleEntry() {
+  @Test void spanFromPayload_startsTraceOnAbsentB3SingleEntry() {
     assertThat(cassandraTracing.spanFromPayload(tracing.tracer(), Collections.emptyMap()))
         .isNotNull();
   }
 
-  @Test public void spanFromPayload_resumesTraceOnB3SingleEntry() {
+  @Test void spanFromPayload_resumesTraceOnB3SingleEntry() {
     assertThat(cassandraTracing.spanFromPayload(tracing.tracer(), Collections.singletonMap("b3",
         ByteBuffer.wrap(new byte[] {'0'}))))
         .extracting(brave.Span::isNoop)

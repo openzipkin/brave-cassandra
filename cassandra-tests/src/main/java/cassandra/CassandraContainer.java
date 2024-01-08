@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2020 The OpenZipkin Authors
+ * Copyright 2017-2024 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -23,14 +23,11 @@ import org.testcontainers.containers.wait.strategy.Wait;
 
 import static org.testcontainers.utility.DockerImageName.parse;
 
-// mostly waiting for https://github.com/testcontainers/testcontainers-java/issues/3537
 public class CassandraContainer extends GenericContainer<CassandraContainer> {
   public CassandraContainer() {
-    super(parse("ghcr.io/openzipkin/zipkin-cassandra:2.23.2"));
-    if ("true".equals(System.getProperty("docker.skip"))) {
-      throw new AssumptionViolatedException("${docker.skip} == true");
-    }
+    super(parse("ghcr.io/openzipkin/zipkin-cassandra:2.23.7"));
     waitStrategy = Wait.forHealthcheck();
+    addExposedPort(9042);
     withStartupTimeout(Duration.ofMinutes(2));
     withLogConsumer(new Slf4jLogConsumer(LoggerFactory.getLogger(CassandraContainer.class)));
   }

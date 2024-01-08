@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2020 The OpenZipkin Authors
+ * Copyright 2017-2024 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -31,37 +31,41 @@ import com.datastax.driver.core.Statement;
 import com.datastax.driver.core.exceptions.DriverInternalError;
 import java.nio.ByteBuffer;
 import java.util.Map;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.ClassRule;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 
 import static brave.Span.Kind.CLIENT;
 import static brave.propagation.SamplingFlags.NOT_SAMPLED;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.junit.Assume.assumeTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.Mockito.spy;
 
-public class ITTracingSession extends ITRemote {
-  // Takes a while to startup, so we make this a class rule
-  @ClassRule public static CassandraContainer cassandra = new CassandraContainer();
+@Testcontainers(disabledWithoutDocker = true)
+@Tag("docker")
+class ITTracingSession extends ITRemote {
+  @Container CassandraContainer cassandra = new CassandraContainer();
 
   CassandraClientTracing cassandraTracing;
   Cluster cluster;
   Session session, spiedSession;
   PreparedStatement prepared;
 
-  @Before public void setup() {
+  @BeforeEach public void setup() {
     cluster = Cluster.builder().addContactPointsWithPorts(cassandra.contactPoint()).build();
     session = newSession(CassandraClientTracing.newBuilder(tracing).propagationEnabled(true));
   }
 
-  @After public void close() {
+  @AfterEach public void close() throws Exception {
     if (cluster != null) cluster.close();
+    super.close();
   }
 
   Session newSession(CassandraClientTracing.Builder builder) {
@@ -72,7 +76,7 @@ public class ITTracingSession extends ITRemote {
     return result;
   }
 
-  @Test public void makesChildOfCurrentSpan() {
+  @Test void makesChildOfCurrentSpan() {
     TraceContext parent = newTraceContext(SamplingFlags.SAMPLED);
     try (Scope scope = currentTraceContext.newScope(parent)) {
       invokeBoundStatement();
@@ -85,7 +89,7 @@ public class ITTracingSession extends ITRemote {
   }
 
   // CASSANDRA-12835 particularly is in 3.11, which fixes simple (non-bound) statement tracing
-  @Test public void propagatesTraceIds_regularStatement() {
+  @Test void propagatesTraceIds_regularStatement() {
     session.execute("SELECT release_version from system.local");
 
     TraceContext extracted = extractB3Header();
@@ -93,7 +97,7 @@ public class ITTracingSession extends ITRemote {
     assertSameIds(testSpanHandler.takeRemoteSpan(CLIENT), extracted);
   }
 
-  @Test public void propagatesTraceIds() {
+  @Test void propagatesTraceIds() {
     invokeBoundStatement();
 
     TraceContext extracted = extractB3Header();
@@ -101,7 +105,7 @@ public class ITTracingSession extends ITRemote {
     assertSameIds(testSpanHandler.takeRemoteSpan(CLIENT), extracted);
   }
 
-  @Test public void propagationDisabledByDefault() {
+  @Test void propagationDisabledByDefault() {
     session.close();
     session = newSession(CassandraClientTracing.newBuilder(tracing));
 
@@ -113,7 +117,7 @@ public class ITTracingSession extends ITRemote {
     assertThat(extractB3Header()).isNull();
   }
 
-  @Test public void propagatesSampledFalse() {
+  @Test void propagatesSampledFalse() {
     try (Scope unsampled = currentTraceContext.newScope(newTraceContext(NOT_SAMPLED))) {
       invokeBoundStatement();
     }
@@ -124,20 +128,20 @@ public class ITTracingSession extends ITRemote {
     // test rule ensures no span was sampled
   }
 
-  @Test public void reportsClientKindToZipkin() {
+  @Test void reportsClientKindToZipkin() {
     invokeBoundStatement();
 
     testSpanHandler.takeRemoteSpan(CLIENT);
   }
 
-  @Test public void defaultSpanNameIsQuery() {
+  @Test void defaultSpanNameIsQuery() {
     invokeBoundStatement();
 
     assertThat(testSpanHandler.takeRemoteSpan(CLIENT).name())
         .isEqualTo("bound-statement");
   }
 
-  @Test public void reportsSpanOnTransportException() {
+  @Test void reportsSpanOnTransportException() {
     cluster.close();
 
     assertThatThrownBy(this::invokeBoundStatement)
@@ -147,16 +151,16 @@ public class ITTracingSession extends ITRemote {
         "Could not send request, session is closed");
   }
 
-  @Test public void addsErrorTag_onCanceledFuture() {
+  @Test void addsErrorTag_onCanceledFuture() throws Exception {
     ResultSetFuture resp = session.executeAsync("SELECT release_version from system.local");
-    assumeTrue("lost race on cancel", resp.cancel(true));
+    assumeTrue(resp.cancel(true), "lost race on cancel");
 
     close(); // blocks until the cancel finished
 
     testSpanHandler.takeRemoteSpanWithErrorMessage(CLIENT, "Task was cancelled.");
   }
 
-  @Test public void reportsServerAddress() {
+  @Test void reportsServerAddress() {
     invokeBoundStatement();
 
     MutableSpan span = testSpanHandler.takeRemoteSpan(CLIENT);
@@ -165,7 +169,7 @@ public class ITTracingSession extends ITRemote {
     assertThat(span.remotePort()).isEqualTo(cassandra.contactPoint().getPort());
   }
 
-  @Test public void customSampler() {
+  @Test void customSampler() {
     cassandraTracing =
         cassandraTracing.toBuilder().sampler(CassandraClientSampler.NEVER_SAMPLE).build();
     session = TracingSession.create(cassandraTracing, ((TracingSession) session).delegate);
@@ -175,7 +179,7 @@ public class ITTracingSession extends ITRemote {
     // test rule ensures no span was sampled
   }
 
-  @Test public void supportsCustomization() {
+  @Test void supportsCustomization() {
     cassandraTracing = cassandraTracing.toBuilder().parser(new CassandraClientParser() {
       @Override public String spanName(Statement statement) {
         return "query";
