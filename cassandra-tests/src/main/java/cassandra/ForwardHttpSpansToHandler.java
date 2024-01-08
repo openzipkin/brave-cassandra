@@ -62,11 +62,11 @@ public class ForwardHttpSpansToHandler implements BeforeAllCallback, AfterAllCal
     zipkin.setDispatcher(new ZipkinDispatcher(spanHandler));
   }
 
-  @Override public void afterAll(ExtensionContext extensionContext) throws Exception {
+  @Override public void beforeAll(ExtensionContext extensionContext) throws Exception {
     zipkin.start();
   }
 
-  @Override public void beforeAll(ExtensionContext extensionContext) throws Exception {
+  @Override public void afterAll(ExtensionContext extensionContext) throws Exception {
     zipkin.shutdown();
   }
 
