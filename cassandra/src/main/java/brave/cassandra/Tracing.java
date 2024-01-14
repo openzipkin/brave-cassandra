@@ -21,6 +21,7 @@ import brave.propagation.B3SingleFormat;
 import brave.propagation.TraceContextOrSamplingFlags;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
+import java.util.Collections;
 import java.util.Map;
 import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.net.Message;
@@ -28,8 +29,6 @@ import org.apache.cassandra.tracing.TraceState;
 import org.apache.cassandra.tracing.TraceStateImpl;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.TimeUUID;
-import zipkin2.reporter.Call;
-import zipkin2.reporter.CheckResult;
 import zipkin2.reporter.brave.AsyncZipkinSpanHandler;
 import zipkin2.reporter.urlconnection.URLConnectionSender;
 
@@ -69,9 +68,13 @@ public class Tracing extends org.apache.cassandra.tracing.Tracing {
     logger.info("using TracingComponent.Explicit(" + endpoint + ")");
     URLConnectionSender sender = URLConnectionSender.create(endpoint);
     try {
-      CheckResult check = sender.check();
-      if (!check.ok()) maybeFailFast(check.error());
+      sender.send(Collections.emptyList());
+    } catch (Throwable t) {
+      propagateIfFatal(t);
+      maybeFailFast(t);
+    }
 
+    try {
       AsyncZipkinSpanHandler zipkinSpanHandler = AsyncZipkinSpanHandler.create(sender);
       // Make sure spans are reported on shutdown
       Runtime.getRuntime().addShutdownHook(new Thread(zipkinSpanHandler::close));
@@ -84,9 +87,20 @@ public class Tracing extends org.apache.cassandra.tracing.Tracing {
           .build();
       component = new TracingComponent.Explicit(tracing);
     } catch (RuntimeException | Error t) {
-      Call.propagateIfFatal(t);
+      propagateIfFatal(t);
       maybeFailFast(t);
       throw t;
+    }
+  }
+
+  // Taken from RxJava throwIfFatal, which was taken from scala
+  static void propagateIfFatal(Throwable t) {
+    if (t instanceof VirtualMachineError) {
+      throw (VirtualMachineError) t;
+    } else if (t instanceof ThreadDeath) {
+      throw (ThreadDeath) t;
+    } else if (t instanceof LinkageError) {
+      throw (LinkageError) t;
     }
   }
 
