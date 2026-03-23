@@ -21,9 +21,8 @@ All artifacts publish to the group ID "io.zipkin.brave.cassandra". We use a comm
 release version for all components.
 
 ### Library Releases
-Snapshots are uploaded to [Sonatype](https://oss.sonatype.org/content/repositories/releases/io/zipkin/brave/cassandra) which
-synchronizes with [Maven Central](http://search.maven.org/#search%7Cga%7C1%7Cg%3A%22io.zipkin.brave.cassandra%22)
+Releases are at [Maven Central](https://central.sonatype.com/search?q=brave-cassandra&namespace=io.zipkin.brave.cassandra)
 
 ### Library Snapshots
-Snapshots are uploaded to [Sonatype](https://oss.sonatype.org/content/repositories/snapshots) after
+Snapshots are uploaded to [Sonatype](https://central.sonatype.com/repository/maven-snapshots/) after
 commits to master.
